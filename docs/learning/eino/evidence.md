@@ -11,19 +11,22 @@
 
 | ID | 结论 | 标签 | 精确证据 | 版本 | 置信度 | 后续验证 |
 |---|---|---|---|---|---|---|
-| E-01 | 当前最新非预发布 tag 候选是 `v0.9.12`；`v0.10.0` 只有 alpha tag | 已验证 | 官方仓库 `git ls-remote --refs --tags`；[`v0.9.12`](https://github.com/cloudwego/eino/tree/v0.9.12) 浅克隆 HEAD 为 `13e1a25c...` | 2026-07-15 refs | 高 | 决策门 1 确认是否采用 |
+| E-01 | 当前最新非预发布 tag 是 `v0.9.12`；`v0.10.0` 只有 alpha tag，用户已确认采用稳定版 | 已验证 | 官方仓库 `git ls-remote --refs --tags`；[`v0.9.12`](https://github.com/cloudwego/eino/tree/v0.9.12) 浅克隆 HEAD 为 `13e1a25c...`；决策门 1 | 2026-07-15 refs | 高 | 已确认 |
 | E-02 | Eino 官方定位为遵循 Go 习惯的 LLM 应用开发框架，能力包括 Components、ADK、Composition | 官方说明 | [`README.md` Overview 与能力列表](https://github.com/cloudwego/eino/blob/v0.9.12/README.md) | `v0.9.12` | 高 | 无需额外实验；能力边界由源码继续校正 |
-| E-03 | `v0.9.12` 的 Quick Start 首先推荐 `ChatModelAgent`，再说明精确控制流使用 Compose | 官方说明 | [`README.md` Quick Start](https://github.com/cloudwego/eino/blob/v0.9.12/README.md) | `v0.9.12` | 高 | 阶段 2 运行 ChatModelAgent 示例 |
+| E-03 | `v0.9.12` 的 Quick Start 首先推荐 `ChatModelAgent`，再说明精确控制流使用 Compose | 官方说明 | [`README.md` Quick Start](https://github.com/cloudwego/eino/blob/v0.9.12/README.md) | `v0.9.12` | 高 | 阶段 2 已运行 ChatModelAgent 示例 |
 | E-04 | `Runner` 是执行 Agent 的主要入口，并负责 flowAgent 管线、回调、命名、run path 与取消 | 已验证 | [`adk/runner.go` `TypedRunner`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/runner.go#L50)；`Query` 将字符串转成用户消息后调用 `Run` | `v0.9.12` | 高 | 阶段 5 从 `Runner.Query` 追踪真实请求 |
 | E-05 | `ChatModelAgent` 在配置 Tool 时构建 ReAct 运行函数，否则走无 Tool 路径 | 已验证 | [`adk/chatmodel.go` `ToolsConfig`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel.go#L136)；同文件 `getRunFunc` 在 `buildNoToolsRunFunc` 与 `buildReActRunFunc` 间选择 | `v0.9.12` | 高 | 阶段 4 用受控 ChatModel + Tool 运行验证 |
 | E-06 | 模型与工具通过公开组件接口接入；Tool schema 与执行能力分离 | 已验证 | [`components/model/interface.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/model/interface.go#L31)；[`components/tool/interface.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/tool/interface.go#L25) | `v0.9.12` | 高 | 阶段 4 用测试实现替换外部依赖 |
 | E-07 | Compose 编译产物 `Runnable` 统一支持 Invoke、Stream、Collect、Transform，并能做数据流范式适配 | 已验证 | [`compose/runnable.go` `Runnable`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/runnable.go#L28)；[`compose/generic_graph.go` `Graph.Compile`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/generic_graph.go#L110) | `v0.9.12` | 高 | 本轮仅建立边界；后续单独实践 Compose |
 | E-08 | Callbacks 覆盖五个固定时点；流返回后的读取错误不会进入 `OnError`，流副本必须关闭 | 已验证 | [`callbacks/doc.go`](https://github.com/cloudwego/eino/blob/v0.9.12/callbacks/doc.go#L17)；[`callbacks/interface.go`](https://github.com/cloudwego/eino/blob/v0.9.12/callbacks/interface.go#L62) | `v0.9.12` | 高 | 阶段 4 注入流内错误并验证双通道观测 |
-| E-09 | 官方示例仓库当前 commit 精确依赖 Eino `v0.9.12`，根模块要求 Go `1.24.7`，当前 Go 1.26.3 满足要求 | 已验证 | [`eino-examples/go.mod`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/go.mod#L1) | commit `171220631...` | 高 | 阶段 2 实际运行示例 |
-| E-10 | 官方 `adk/intro/chatmodel` 示例覆盖 Agent、Tool、Runner、事件、Interrupt/Resume 与 CheckpointStore | 官方说明 | [`chatmodel.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/intro/chatmodel/chatmodel.go#L34)；[`subagents/agent.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/intro/chatmodel/subagents/agent.go#L31)；[`booksearch.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/intro/chatmodel/subagents/booksearch.go#L27) | 示例 commit `171220631...` + Eino `v0.9.12` | 高 | 阶段 2 原样运行并记录输出 |
-| E-11 | 官方示例默认从环境变量创建 OpenAI 兼容模型，也可用 `MODEL_TYPE=ark` 切换 Ark | 已验证 | [`adk/common/model/chat_model.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/common/model/chat_model.go#L35) | 示例 commit `171220631...` | 高 | 阶段 2 检查变量存在但不输出值 |
+| E-09 | 官方示例仓库当前 commit 精确依赖 Eino `v0.9.12`，根模块要求 Go `1.24.7`，当前 Go 1.26.3 满足要求 | 已验证 | [`eino-examples/go.mod`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/go.mod#L1) | commit `171220631...` | 高 | 阶段 2 实际运行已完成 |
+| E-10 | 官方 `adk/intro/chatmodel` 示例实际覆盖 Agent、Tool、Runner、事件、Interrupt/Resume 与 CheckpointStore | 已验证 | [`chatmodel.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/intro/chatmodel/chatmodel.go#L34)；[`subagents/agent.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/intro/chatmodel/subagents/agent.go#L31)；阶段 2 运行输出 | 示例 commit `171220631...` + Eino `v0.9.12` | 高 | 已完成 |
+| E-11 | 官方示例默认从环境变量创建 OpenAI 兼容模型，也可用 `MODEL_TYPE=ark` 切换 Ark | 已验证 | [`adk/common/model/chat_model.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/adk/common/model/chat_model.go#L35) | 示例 commit `171220631...` | 高 | 变量检查与实际运行均已完成 |
 | E-12 | Eino 源码测试覆盖 Tool ReAct、per-run callbacks 与取消边界，但本轮没有执行这些测试 | 已验证 | [`adk/chatmodel_test.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel_test.go)、[`adk/callback_integration_test.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/callback_integration_test.go)、[`adk/cancel_edge_test.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/cancel_edge_test.go) | `v0.9.12` | 中 | 阶段 2/4 运行最小相关测试；当前仅证明上游存在覆盖 |
-| E-13 | “ADK 为本轮主线，Compose 为次级路径”是学习范围选择，不是 Eino 只支持 ADK 的事实 | 建议 | E-03、E-04、E-05 与 E-07 交叉 | `v0.9.12` | 高 | 决策门 1 由用户确认 |
+| E-13 | “ADK 为本轮主线，Compose 为次级路径”是已确认的学习范围选择，不是 Eino 只支持 ADK 的事实 | 建议 | E-03、E-04、E-05、E-07 与决策门 1 交叉 | `v0.9.12` | 高 | 已确认 |
+| E-14 | 官方 `adk/intro/chatmodel` 示例可在 Go 1.26.3 下以锁定依赖构建 | 已验证 | 对示例 commit `171220631...` 执行 `go build -o <临时文件> ./adk/intro/chatmodel`，退出码 0，生成 arm64 Mach-O 可执行文件 | Eino `v0.9.12` | 高 | 构建兼容性已验证；不能替代在线运行 |
+| E-15 | `.env` 键名与 `=` 之间的空格导致变量未导入，EinoExt 收到空 BaseURL 后回退到 OpenAI 默认端点 | 已验证 | 首次运行错误为 `NodeRunError`，目标为 `api.openai.com`；受控导入后 BaseURL 为空；规范化键格式后识别为有效非默认地址 | 2026-07-15 环境 | 高 | 已修复，并将 `.env` 权限收紧为 `0600` |
+| E-16 | 自定义 OpenAI 兼容代理可驱动官方 ChatModelAgent 完成 Tool、Interrupt、Resume 和最终回答 | 已验证 | 运行锁定 commit 的官方二进制；实际输出依次出现 `ask_for_clarification`、交互输入、`search_book`、Tool response 与 answer；退出码 0 | Eino `v0.9.12` | 高 | 阶段 2 已完成 |
 
 ## 实际命令记录
 
@@ -35,7 +38,9 @@
 | 读取 Eino `go.mod` | 模块 `github.com/cloudwego/eino`，`go 1.18` | 已执行 |
 | `git clone --depth 1 https://github.com/cloudwego/eino-examples.git ...` | HEAD `171220631fb7068ead50b7cd964b8c471647117d` | 已执行，源码位于系统临时目录且不纳入仓库 |
 | 读取 Eino Examples `go.mod` | `go 1.24.7`，依赖 `github.com/cloudwego/eino v0.9.12` | 已执行 |
-| 官方示例 `go run` | 未执行：协议模式要求停在决策门 1，且尚未确认 Go/凭据策略 | 待阶段 2 |
+| `GOMODCACHE=<临时目录> GOCACHE=<临时目录> go build -o <临时文件> ./adk/intro/chatmodel` | 首次受沙箱内本机代理限制；通过已授权代理重试后退出码 0，生成 arm64 Mach-O 可执行文件 | 已执行，构建通过 |
+| 使用未规范化 `.env` 运行官方示例二进制 | ChatModel 节点请求 OpenAI 默认端点并返回 `EOF`；节点路径为 `[node_1, ChatModel]` | 已执行，失败根因已定位 |
+| 规范化 `.env` 键格式并重新运行官方示例二进制 | 依次输出澄清 Tool、Interrupt、补充输入、搜索 Tool、Tool response 和最终回答；退出码 0 | 已执行，阶段 2 通过 |
 | `go test ./...` / `go vet ./...` | 未执行：当前学习仓库尚无 `go.mod`，本轮只新增文档 | 不适用，待实现阶段 |
 
 ## 低置信度与冲突项
@@ -43,5 +48,4 @@
 | 项目 | 当前结论 | 风险 | 处理 |
 |---|---|---|---|
 | 官网文档版本 | 官网是滚动文档，未证明与 `v0.9.12` 一一对应 | 示例 API 可能先于或晚于 tag | 所有关键 API 回到 tag 源码核对 |
-| 官方示例可运行性 | 依赖版本和 Go 工具链匹配，但仍要求真实模型服务 | 无凭据或模型端点不可达时不能原样运行 | 阻塞时如实记录，不用阅读代替运行 |
 | 回调完整捕获错误 | 非流错误可进入 `OnError`，流读取期错误不会 | 只看回调会漏报 | AgentEvent/StreamReader 错误与 Callback 同时观测 |

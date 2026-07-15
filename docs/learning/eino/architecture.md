@@ -6,7 +6,7 @@
 - 主类别：AI 组件与 Agent 编排框架。
 - 本轮推荐主路径：`ChatModelAgent + Tool + Runner`。
 - Compose 定位：需要精确控制时使用的确定性 Graph/Chain/Workflow；不是本轮第一版纵向项目的入口。
-- 结论状态：定位和组件关系已由 tag README、源码与版本匹配示例交叉核对；实际运行仍待决策门 1 后执行。
+- 结论状态：定位和组件关系已由 tag README、源码与版本匹配示例交叉核对，并于 2026-07-15 通过决策门 1；官方 ChatModelAgent 示例已实际完成 Tool、Interrupt、Resume 和最终回答链路。
 
 ## 系统拓扑
 
@@ -167,6 +167,4 @@ ChatModelAgent.getRunFunc
 
 ## 当前未决项
 
-- 决策门 1 尚未确认 `v0.9.12` 与 ADK 主路径。
-- 当前 shell 实测并经用户确认使用 Go 1.26.3，满足 Eino 核心与官方示例的 Go 版本要求。
 - 真实运行链路、故障矩阵和源码导航必须由阶段 2 至阶段 6 的实际结果生成，本文件不提前声称已验证。
