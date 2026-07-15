@@ -27,6 +27,12 @@
 | E-14 | 官方 `adk/intro/chatmodel` 示例可在 Go 1.26.3 下以锁定依赖构建 | 已验证 | 对示例 commit `171220631...` 执行 `go build -o <临时文件> ./adk/intro/chatmodel`，退出码 0，生成 arm64 Mach-O 可执行文件 | Eino `v0.9.12` | 高 | 构建兼容性已验证；不能替代在线运行 |
 | E-15 | `.env` 键名与 `=` 之间的空格导致变量未导入，EinoExt 收到空 BaseURL 后回退到 OpenAI 默认端点 | 已验证 | 首次运行错误为 `NodeRunError`，目标为 `api.openai.com`；受控导入后 BaseURL 为空；规范化键格式后识别为有效非默认地址 | 2026-07-15 环境 | 高 | 已修复，并将 `.env` 权限收紧为 `0600` |
 | E-16 | 自定义 OpenAI 兼容代理可驱动官方 ChatModelAgent 完成 Tool、Interrupt、Resume 和最终回答 | 已验证 | 运行锁定 commit 的官方二进制；实际输出依次出现 `ask_for_clarification`、交互输入、`search_book`、Tool response 与 answer；退出码 0 | Eino `v0.9.12` | 高 | 阶段 2 已完成 |
+| E-17 | ToolsNode 对普通 Tool error 使用 `%w` 包装并终止调用，错误链可沿 AgentEvent 返回 | 已验证 | [`compose/tool_node.go` `ToolsNode.Invoke`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/tool_node.go#L1097) 在 task error 非 interrupt 时返回 `failed to invoke tool...: %w` | Eino `v0.9.12` | 高 | 阶段 4 用 `errors.Is` 验证三类错误 |
+| E-18 | `WrapToolWithErrorHandler` 会把 Tool error 转换为字符串结果并返回 nil error | 已验证 | [`components/tool/utils/error_handler.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/tool/utils/error_handler.go#L27) 与 `errorHelper.InvokableRun` | Eino `v0.9.12` | 高 | 纵向项目不使用该 wrapper，避免掩盖 L2 错误通道 |
+| E-19 | `adk.GetMessage` 能从完整或流式 AgentEvent 提取消息，并在流式场景复制后拼接 stream | 已验证 | [`adk/utils.go` `TypedGetMessage`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/utils.go#L278) | Eino `v0.9.12` | 高 | 非流式入口先采用；阶段 6 核对流式迁移预测 |
+| E-20 | ChatModelAgent 在 `v0.9.12` 中把 Tool schema 作为调用级 `model.WithTools` option 传给模型，而不是依赖预先修改模型实例 | 已验证 | [`adk/chatmodel.go` ReAct 构建](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel.go#L1468)；scripted model 通过 `model.GetCommonOptions` 实际接收 ToolInfo | Eino `v0.9.12` | 高 | 阶段 5 纳入运行链路图 |
+| E-21 | 自定义天气 Agent 的非流式 ReAct、三类错误链和 per-run Callback 均可离线重复验证 | 已验证 | `examples/diagnosable-weather-agent/*_test.go`；`docs/learning/eino/failure-matrix.md`；仓库测试命令 | Eino `v0.9.12` + Go `1.26.3` | 高 | 阶段 6 流式迁移后回归 |
+| E-22 | 自定义 OpenAI 兼容代理可驱动天气 Agent 完成两次模型调用和一次 `weather_lookup` Tool 调用 | 已验证 | 2026-07-15 在线冒烟 Callback 日志与最终回答；退出码 0 | Eino `v0.9.12` + EinoExt OpenAI `v0.1.13` | 高 | 在线结果仅作冒烟，离线测试仍是回归基线 |
 
 ## 实际命令记录
 
@@ -41,7 +47,12 @@
 | `GOMODCACHE=<临时目录> GOCACHE=<临时目录> go build -o <临时文件> ./adk/intro/chatmodel` | 首次受沙箱内本机代理限制；通过已授权代理重试后退出码 0，生成 arm64 Mach-O 可执行文件 | 已执行，构建通过 |
 | 使用未规范化 `.env` 运行官方示例二进制 | ChatModel 节点请求 OpenAI 默认端点并返回 `EOF`；节点路径为 `[node_1, ChatModel]` | 已执行，失败根因已定位 |
 | 规范化 `.env` 键格式并重新运行官方示例二进制 | 依次输出澄清 Tool、Interrupt、补充输入、搜索 Tool、Tool response 和最终回答；退出码 0 | 已执行，阶段 2 通过 |
-| `go test ./...` / `go vet ./...` | 未执行：当前学习仓库尚无 `go.mod`，本轮只新增文档 | 不适用，待实现阶段 |
+| `go mod tidy` | 锁定依赖解析成功并生成 `go.sum`；首次沙箱内执行受本机代理网络边界阻止，授权后成功 | 已执行 |
+| `go test ./examples/diagnosable-weather-agent/... -run 'TestWeather\|TestStatic\|TestNewWeather' -count=1` | 正常 ReAct、三类故障、Tool/Provider 与 Callback 测试通过 | 已执行 |
+| `go test -race ./examples/diagnosable-weather-agent/... -count=1` | 通过，无竞态报告 | 已执行 |
+| `go test ./... -count=1` | 通过 | 已执行 |
+| `go vet ./...` | 通过 | 已执行 |
+| 使用现有 `.env` 运行天气 Agent | 自定义代理完成两次 OpenAI ChatModel 调用和一次 `weather_lookup`；输出与静态数据一致；退出码 0 | 已执行，阶段 4 通过 |
 
 ## 低置信度与冲突项
 
