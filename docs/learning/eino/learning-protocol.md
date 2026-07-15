@@ -8,8 +8,8 @@
 | 源码来源 | `repository`：`https://github.com/cloudwego/eino` |
 | 框架版本 | 已确认 `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L2：运行与诊断 |
-| 当前阶段 | 阶段 4：运行闭环已完成；下一步阶段 5 |
-| 当前决策门 | 决策门 2 已通过 |
+| 当前阶段 | 阶段 5：源码链路已完成；下一步阶段 6 |
+| 当前决策门 | 无；决策门 2 已通过，下一决策门为阶段 6 后的决策门 3 |
 | 当前能力等级 | L1 已验收，L2 尚未验收 |
 | 最近更新 | 2026-07-15 |
 
@@ -21,7 +21,7 @@
 | `source` | `repository` | 用户提供 Eino 官方仓库链接 |
 | `ref` | `v0.9.12` | 用户已在决策门 1 确认最新非预发布 tag |
 | `target_level` | `L2` | 用户明确指定 |
-| `mode` | `execute` | 用户确认决策门 1，并授权推进下一未完成阶段 |
+| `mode` | `execute` | 用户已通过决策门 1/2，并持续授权推进下一未完成阶段 |
 | `output` | `docs/learning/eino/` | 遵循学习文档目录约定 |
 
 ## 学习目标
@@ -108,8 +108,17 @@ flowchart LR
 |---|---|---|---|
 | `v0.9.12` 是当前已确认的最新非预发布 tag | 官方 Git refs、tag 浅克隆 HEAD | 高 | 已验证 |
 | 当前推荐入口是 `ChatModelAgent + Runner`，Tool 触发 ReAct | tag README、`adk/runner.go`、`adk/chatmodel.go`、官方示例、纵向项目 | 高 | 源码、官方示例和自定义项目均已验证 |
-| Compose 用于需要精确控制的 Graph/Workflow | tag README、`compose.Runnable` 与 `Graph.Compile` | 高 | 源码已验证，运行待验证 |
+| Compose 用于需要精确控制的 Graph/Workflow | tag README、`compose.Runnable`、`Graph.Compile` 与 ADK ReAct 运行链路 | 高 | ADK 内部 ReAct Graph 已运行验证；独立 Compose 项目不在本轮范围 |
 | Callbacks 覆盖组件生命周期，但流读取期错误不会进入 `OnError` | callbacks 包文档与接口源码 | 高 | 源码已验证，故障实验待执行 |
+
+## 运行与源码链路
+
+- 运行链路：[runtime-path.md](runtime-path.md)。
+- 源码导航：[source-map.md](source-map.md)。
+- 当前最关键入口：应用 `WeatherAgent.Query` -> Eino `Runner.Query` -> `typedRunnerRunImpl` -> `flowAgent.Run`。
+- 当前最关键控制流：`ChatModelAgent.Run` -> per-run ReAct Graph -> `ChatModel -> ToolsNode -> ChatModel`。
+- 当前最关键扩展点：调用级 `model.WithTools`、`tool.InvokableTool`、`adk.WithCallbacks` 与应用 `WeatherProvider`。
+- 错误主路径：Provider/Model error -> `%w` -> Compose `NodeRunError.Unwrap()` -> `AgentEvent.Err` -> 应用 `errors.Is`。
 
 ## 决策门 1：版本与主路径
 
@@ -301,7 +310,7 @@ go run ./examples/diagnosable-weather-agent "What is the weather in Beijing?"
 | 2. 官方完整示例 | 已完成 | 构建、故障诊断与成功运行记录 | 退出码 0；Tool、Interrupt、Resume 与最终回答均有实际输出 |
 | 3. 纵向项目设计 | 已完成 | 本协议更新 | 决策门 2 已于 2026-07-15 通过 |
 | 4. 运行闭环 | 已完成 | 示例代码、`failure-matrix.md` | 离线测试、竞态检测、vet、在线冒烟 |
-| 5. 源码链路 | 待开始 | 运行链路、源码导航 | 文件、符号与调用关系 |
+| 5. 源码链路 | 已完成 | `runtime-path.md`、`source-map.md` | 锁定版本文件、符号、调用关系与现有测试 |
 | 6. 单变量迁移 | 待开始 | 流式迁移预测与结果 | 修改前后回归测试 |
 | 7. L2 验收 | 待开始 | 验收记录 | 决策门 3 |
 
@@ -315,26 +324,27 @@ go run ./examples/diagnosable-weather-agent "What is the weather in Beijing?"
 | 超时可诊断 | 已验证 | `DeadlineExceeded` 错误链、Tool 失败 Callback 与事件断言 |
 | 业务错误可诊断 | 已验证 | `ErrUnsupportedCity` 错误链与 `unsupported_city` 分类 |
 | 依赖不可用可诊断 | 已验证 | `ErrWeatherUnavailable` 错误链与 `weather_unavailable` 分类 |
-| 端到端运行/源码链路 | 待验证 | `runtime-path.md`、`source-map.md` |
+| 端到端运行/源码链路 | 已验证 | 在线天气请求、`runtime-path.md`、`source-map.md` |
 | 单变量迁移 | 待验证 | 迁移前预测、流式测试与差异结论 |
 
-当前推荐结论：阶段 0 至阶段 4 已完成，L1 已验收；尚未完成源码链路和流式迁移，因此 L2 未验收，更不能视为生产就绪。
+当前推荐结论：阶段 0 至阶段 5 已完成，L1 已验收；尚未完成单变量流式迁移，因此 L2 未验收，更不能视为生产就绪。
 
 ## 问题债务
 
 | 问题 | 当前假设 | 影响范围 | 验证方式 | 最晚解决阶段 |
 |---|---|---|---|---|
-| 官网滚动文档是否与 v0.9.12 完全一致 | 不能默认一致 | API 用法与主路径说明 | 逐项与 tag 源码、示例交叉核对 | 阶段 5 |
 | 流式错误的观测策略 | 应从 StreamReader/AgentEvent 显式采集，不能只依赖 Callback `OnError` | L2 故障诊断 | 流内错误注入测试 | 阶段 6 |
+
+官网版本问题已在阶段 5 关闭：当前主路径全部使用 tag 源码和精确模块版本核对；滚动文档不再作为未追踪 API 的版本证据。
 
 ## 产物索引
 
 - [证据表](evidence.md)
 - [架构图与责任边界](architecture.md)
 - [阶段 4 故障矩阵](failure-matrix.md)
-- `runtime-path.md`：阶段 5 开始时创建。
-- `source-map.md`：阶段 5 开始时创建。
+- [阶段 5 运行链路](runtime-path.md)
+- [阶段 5 源码导航](source-map.md)
 
 ## 下一步
 
-进入阶段 5：从在线已验证的 `Runner.Query` 请求沿实际调用链追踪到 ChatModel、ToolsNode、`weather_lookup` 和 `AgentEvent`，创建 `runtime-path.md` 与 `source-map.md`。阶段 5 不改变当前可运行代码。
+进入阶段 6：只把 `RunnerConfig.EnableStreaming` 从 `false` 改为 `true`。修改前先记录预测，再调整测试和入口的流式消费，验证 stream 关闭、流内错误与 Callback 的边界；Agent、Tool 和 Provider 契约保持不变。

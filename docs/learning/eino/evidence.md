@@ -33,6 +33,11 @@
 | E-20 | ChatModelAgent 在 `v0.9.12` 中把 Tool schema 作为调用级 `model.WithTools` option 传给模型，而不是依赖预先修改模型实例 | 已验证 | [`adk/chatmodel.go` ReAct 构建](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel.go#L1468)；scripted model 通过 `model.GetCommonOptions` 实际接收 ToolInfo | Eino `v0.9.12` | 高 | 阶段 5 纳入运行链路图 |
 | E-21 | 自定义天气 Agent 的非流式 ReAct、三类错误链和 per-run Callback 均可离线重复验证 | 已验证 | `examples/diagnosable-weather-agent/*_test.go`；`docs/learning/eino/failure-matrix.md`；仓库测试命令 | Eino `v0.9.12` + Go `1.26.3` | 高 | 阶段 6 流式迁移后回归 |
 | E-22 | 自定义 OpenAI 兼容代理可驱动天气 Agent 完成两次模型调用和一次 `weather_lookup` Tool 调用 | 已验证 | 2026-07-15 在线冒烟 Callback 日志与最终回答；退出码 0 | Eino `v0.9.12` + EinoExt OpenAI `v0.1.13` | 高 | 在线结果仅作冒烟，离线测试仍是回归基线 |
+| E-23 | `Runner.Query` 把字符串转为 UserMessage 后，所有 `*schema.Message` Agent 都进入 flowAgent 生命周期 | 已验证 | [`adk/runner.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/runner.go#L38) `newUserMessage`、`Query`、`typedRunnerRunImpl`；[`adk/flow.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/flow.go#L352) `flowAgent.Run` | Eino `v0.9.12` | 高 | 已纳入 `runtime-path.md` |
+| E-24 | ChatModelAgent 首次运行冻结默认配置，但 ReAct Graph 在每次执行时创建并编译 | 已验证 | [`adk/chatmodel.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel.go#L1366) `buildRunFunc` 的 `sync.Once`；同文件 `buildMessageReActRunFunc` run closure 内 `newReact` 与 `Chain.Compile` | Eino `v0.9.12` | 高 | 阶段 6 核对流式模式是否只改变执行分支 |
+| E-25 | 默认 model/tool event-sender wrapper 把两类成功输出主动写入 Agent generator，flowAgent 再补 AgentName/RunPath 并转发 | 已验证 | [`adk/wrappers.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/wrappers.go#L261) model sender、同文件 Tool sender；[`adk/flow.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/flow.go#L478) `flowAgent.run` | Eino `v0.9.12` | 高 | 已纳入 `source-map.md` |
+| E-26 | Tool 错误先由 InferTool 和 ToolsNode 以 `%w` 包装，再由可 `Unwrap` 的 Compose NodeRunError 增加节点路径，最终进入 `AgentEvent.Err` | 已验证 | [`invokable_func.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/tool/utils/invokable_func.go#L174)、[`tool_node.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/tool_node.go#L1097)、[`error.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/error.go#L62)、阶段 4 `errors.Is` 测试 | Eino `v0.9.12` | 高 | 已完成非流式错误链追踪 |
+| E-27 | EinoExt OpenAI 从调用级 model options 读取 ToolInfo，转换为 Chat Completions tools，并用同一 ctx 发起 HTTP 请求 | 已验证 | EinoExt OpenAI `v0.1.13` `Generate`；ACL OpenAI `v0.1.17` `genRequest`、`Generate` 与 `CreateChatCompletion` | 精确模块版本 | 高 | 已纳入外部边界导航 |
 
 ## 实际命令记录
 
@@ -53,6 +58,7 @@
 | `go test ./... -count=1` | 通过 | 已执行 |
 | `go vet ./...` | 通过 | 已执行 |
 | 使用现有 `.env` 运行天气 Agent | 自定义代理完成两次 OpenAI ChatModel 调用和一次 `weather_lookup`；输出与静态数据一致；退出码 0 | 已执行，阶段 4 通过 |
+| 沿在线天气请求追踪 Eino/EinoExt 精确版本源码 | 已定位 Runner、flowAgent、ReAct、OpenAI、ToolsNode、event sender、Callback 和 NodeRunError 的文件与符号 | 已执行，阶段 5 通过 |
 
 ## 低置信度与冲突项
 
