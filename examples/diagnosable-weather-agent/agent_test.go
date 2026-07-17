@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 )
@@ -18,14 +19,18 @@ import (
 type scriptedModelState struct {
 	mu              sync.Mutex
 	calls           int
+	streamCalls     int
 	city            string
 	sawToolResponse bool
 }
 
 type scriptedWeatherModel struct {
-	state *scriptedModelState
-	tools []*schema.ToolInfo
+	state       *scriptedModelState
+	tools       []*schema.ToolInfo
+	streamError error
 }
+
+var errModelStreamInterrupted = errors.New("model stream interrupted")
 
 func newScriptedWeatherModel(city string) *scriptedWeatherModel {
 	return &scriptedWeatherModel{state: &scriptedModelState{city: city}}
@@ -73,21 +78,38 @@ func (m *scriptedWeatherModel) Stream(
 	input []*schema.Message,
 	opts ...model.Option,
 ) (*schema.StreamReader[*schema.Message], error) {
+	m.state.mu.Lock()
+	m.state.streamCalls++
+	m.state.mu.Unlock()
+
 	message, err := m.Generate(ctx, input, opts...)
 	if err != nil {
 		return nil, err
+	}
+	if m.streamError != nil && len(message.ToolCalls) == 0 {
+		reader, writer := schema.Pipe[*schema.Message](2)
+		writer.Send(schema.AssistantMessage("Beijing is sunny, ", nil), nil)
+		writer.Send(nil, m.streamError)
+		writer.Close()
+		return reader, nil
+	}
+	if len(message.ToolCalls) == 0 {
+		return schema.StreamReaderFromArray([]*schema.Message{
+			schema.AssistantMessage("Beijing is sunny, ", nil),
+			schema.AssistantMessage("28 C, with 35% humidity.", nil),
+		}), nil
 	}
 	return schema.StreamReaderFromArray([]*schema.Message{message}), nil
 }
 
 func (m *scriptedWeatherModel) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
-	return &scriptedWeatherModel{state: m.state, tools: tools}, nil
+	return &scriptedWeatherModel{state: m.state, tools: tools, streamError: m.streamError}, nil
 }
 
-func (m *scriptedWeatherModel) snapshot() (calls int, sawToolResponse bool) {
+func (m *scriptedWeatherModel) snapshot() (calls, streamCalls int, sawToolResponse bool) {
 	m.state.mu.Lock()
 	defer m.state.mu.Unlock()
-	return m.state.calls, m.state.sawToolResponse
+	return m.state.calls, m.state.streamCalls, m.state.sawToolResponse
 }
 
 func TestWeatherAgentReAct(t *testing.T) {
@@ -106,15 +128,95 @@ func TestWeatherAgentReAct(t *testing.T) {
 	if message.Content != "Beijing is sunny, 28 C, with 35% humidity." {
 		t.Fatalf("Query() content = %q", message.Content)
 	}
-	calls, sawToolResponse := chatModel.snapshot()
-	if calls != 2 || !sawToolResponse {
-		t.Fatalf("model calls = %d, saw tool response = %v", calls, sawToolResponse)
+	calls, streamCalls, sawToolResponse := chatModel.snapshot()
+	if calls != 2 || streamCalls != 2 || !sawToolResponse {
+		t.Fatalf("model calls = %d, stream calls = %d, saw tool response = %v", calls, streamCalls, sawToolResponse)
 	}
 	if !hasCallbackRecord(observer.Records(), "Tool", "succeeded", "") {
 		t.Fatalf("callback records = %#v, want successful Tool record", observer.Records())
 	}
 	if strings.Contains(fmt.Sprint(observer.Records()), "Beijing") {
 		t.Fatalf("callback records contain tool input: %#v", observer.Records())
+	}
+}
+
+func TestWeatherAgentStreamError(t *testing.T) {
+	ctx := context.Background()
+	chatModel := newScriptedWeatherModel("Beijing")
+	chatModel.streamError = errModelStreamInterrupted
+	agent, err := NewWeatherAgent(ctx, chatModel, NewStaticWeatherProvider())
+	if err != nil {
+		t.Fatalf("NewWeatherAgent() error = %v", err)
+	}
+	observer := NewObserver(nil)
+
+	message, err := agent.Query(ctx, "What is the weather in Beijing?", observer.Handler())
+	if message != nil {
+		t.Fatalf("Query() message = %#v, want nil", message)
+	}
+	if !errors.Is(err, errModelStreamInterrupted) {
+		t.Fatalf("Query() error = %v, want stream error", err)
+	}
+	records := observer.Records()
+	if !hasCallbackRecord(records, "ChatModel", "started", "") {
+		t.Fatalf("callback records = %#v, want ChatModel start record", records)
+	}
+	if hasCallbackRecord(records, "ChatModel", "failed", "internal") {
+		t.Fatalf("callback records = %#v, stream read error must not rely on ChatModel OnError", records)
+	}
+}
+
+func TestConsumeAgentEventMessageClosesRetainedStream(t *testing.T) {
+	reader, writer := schema.Pipe[*schema.Message](2)
+	writer.Send(schema.AssistantMessage("hello ", nil), nil)
+	writer.Send(schema.AssistantMessage("world", nil), nil)
+	writer.Close()
+	event := &adk.AgentEvent{
+		Output: &adk.AgentOutput{
+			MessageOutput: &adk.MessageVariant{
+				IsStreaming:   true,
+				MessageStream: reader,
+				Role:          schema.Assistant,
+			},
+		},
+	}
+
+	message, err := consumeAgentEventMessage(event)
+	if err != nil {
+		t.Fatalf("consumeAgentEventMessage() error = %v", err)
+	}
+	if message.Content != "hello world" {
+		t.Fatalf("consumeAgentEventMessage() content = %q", message.Content)
+	}
+	if _, err := event.Output.MessageOutput.MessageStream.Recv(); !errors.Is(err, schema.ErrRecvAfterClosed) {
+		t.Fatalf("retained stream Recv() error = %v, want ErrRecvAfterClosed", err)
+	}
+}
+
+func TestConsumeAgentEventMessageClosesRetainedStreamOnError(t *testing.T) {
+	reader, writer := schema.Pipe[*schema.Message](2)
+	writer.Send(schema.AssistantMessage("partial", nil), nil)
+	writer.Send(nil, errModelStreamInterrupted)
+	writer.Close()
+	event := &adk.AgentEvent{
+		Output: &adk.AgentOutput{
+			MessageOutput: &adk.MessageVariant{
+				IsStreaming:   true,
+				MessageStream: reader,
+				Role:          schema.Assistant,
+			},
+		},
+	}
+
+	message, err := consumeAgentEventMessage(event)
+	if message != nil {
+		t.Fatalf("consumeAgentEventMessage() message = %#v, want nil", message)
+	}
+	if !errors.Is(err, errModelStreamInterrupted) {
+		t.Fatalf("consumeAgentEventMessage() error = %v, want stream error", err)
+	}
+	if _, err := event.Output.MessageOutput.MessageStream.Recv(); !errors.Is(err, schema.ErrRecvAfterClosed) {
+		t.Fatalf("retained stream Recv() error = %v, want ErrRecvAfterClosed", err)
 	}
 }
 

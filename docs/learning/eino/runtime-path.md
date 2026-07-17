@@ -4,11 +4,11 @@
 
 - `已验证` Eino 源码：`v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324`。
 - `已验证` 模型组件：EinoExt OpenAI `v0.1.13`，底层 ACL OpenAI `v0.1.17`。
-- `已验证` 应用模式：`RunnerConfig.EnableStreaming=false`。
+- `已验证` 应用模式：`RunnerConfig.EnableStreaming=true`。
 - 真实输入：`北京天气怎么样？`。
 - 实际结果：第一次模型调用产生 `weather_lookup` ToolCall，Tool 返回北京晴天、28°C、湿度 35%，第二次模型调用生成一致的最终回答。
 
-本文件只追踪上述非流式请求。多 Agent、checkpoint、retry、failover 和流式读取不属于本阶段链路。
+本文件追踪阶段 6 迁移后的流式请求。多 Agent、checkpoint、retry、failover 和流式 Tool 不属于本轮链路。
 
 ## 端到端序列
 
@@ -24,22 +24,22 @@ sequenceDiagram
     participant Tool as weather_lookup
 
     CLI->>Runner: Query(ctx, "北京天气怎么样？", callbacks)
-    Runner->>Flow: Run(AgentInput{UserMessage, streaming=false})
+    Runner->>Flow: Run(AgentInput{UserMessage, streaming=true})
     Flow->>Agent: Run(input)
     Agent->>Agent: 首次冻结配置、读取 ToolInfo
     Agent->>Graph: 创建并编译 ReAct Graph
-    Graph->>Model: Generate(messages, model.WithTools)
-    Model-->>Graph: AssistantMessage + ToolCall
-    Agent-->>CLI: Assistant AgentEvent
+    Graph->>Model: Stream(messages, model.WithTools)
+    Model-->>Graph: MessageStream + ToolCall
+    Agent-->>CLI: Assistant AgentEvent + MessageStream
     Graph->>Tools: Invoke(ToolCall)
     Tools->>Tool: InvokableRun(JSON arguments)
     Tool-->>Tools: JSON weather result
     Agent-->>CLI: Tool AgentEvent
     Tools-->>Graph: ToolMessage(callID)
-    Graph->>Model: Generate(history + ToolMessage)
-    Model-->>Graph: final AssistantMessage
-    Agent-->>CLI: final Assistant AgentEvent
-    CLI->>CLI: GetMessage，筛选无 ToolCall 的 Assistant
+    Graph->>Model: Stream(history + ToolMessage)
+    Model-->>Graph: final MessageStream
+    Agent-->>CLI: final Assistant AgentEvent + MessageStream
+    CLI->>CLI: GetMessage 拼接、关闭保留副本、筛选最终 Assistant
 ```
 
 ## 正常路径
@@ -47,20 +47,20 @@ sequenceDiagram
 | 步骤 | 文件与符号 | 跨层数据 | 已验证结论 |
 |---|---|---|---|
 | 1. 建立调用边界 | `main.go:run` | CLI 参数、环境配置、带 deadline 的 `context.Context` | 同一个 ctx 传入模型构造、Agent 和 Provider |
-| 2. 装配 Agent | `agent.go:NewWeatherAgent` | `ToolCallingChatModel`、`WeatherProvider`、`InvokableTool` | 应用固定单 Agent、单 Tool、非流式 Runner |
+| 2. 装配 Agent | `agent.go:NewWeatherAgent` | `ToolCallingChatModel`、`WeatherProvider`、`InvokableTool` | 应用固定单 Agent、单 Tool、流式 Runner；Tool 仍非流式 |
 | 3. 创建 Tool schema | `weather.go:NewWeatherTool` -> `utils.InferTool` | `WeatherRequest` 的 JSON/jsonschema tag -> `schema.ToolInfo` | Tool metadata 与 Tool 执行由同一公开对象提供 |
 | 4. 创建用户消息 | `Runner.Query` -> `newUserMessage` | string -> `schema.UserMessage` | `Query` 是 `Run` 的便利入口，不含 Agent 业务逻辑 |
-| 5. 进入统一生命周期 | `typedRunnerRunImpl` -> `toFlowAgent` -> `flowAgent.Run` | `AgentInput{Messages, EnableStreaming:false}` | 即使只有一个 Agent，也经过 flowAgent，统一注入命名、回调、run path 和取消 |
+| 5. 进入统一生命周期 | `typedRunnerRunImpl` -> `toFlowAgent` -> `flowAgent.Run` | `AgentInput{Messages, EnableStreaming:true}` | 即使只有一个 Agent，也经过 flowAgent，统一注入命名、回调、run path 和取消 |
 | 6. 首次冻结配置 | `ChatModelAgent.buildRunFunc` -> `prepareExecContext` -> `genToolInfos` | `BaseTool.Info()` -> `[]*schema.ToolInfo` | 配置通过 `sync.Once` 冻结；有 Tool 时选择 ReAct 路径 |
 | 7. 创建执行图 | `buildMessageReActRunFunc` -> `newReact` -> `Chain.Compile` | instruction + user messages -> `reactInput` | run closure 被复用，但 ReAct Graph 在每次执行中创建并编译 |
-| 8. 第一次模型调用 | `ChatModelAgent.Run` -> `model.WithTools` -> OpenAI `Generate` | system/user messages + ToolInfo -> Chat Completions request | Tool schema 是调用级 option，不要求修改共享模型实例 |
-| 9. 发出模型事件 | `typedEventSenderModel.Generate` | Assistant message + ToolCall -> `AgentEvent` | event-sender wrapper 在模型成功后主动写入 Agent generator |
+| 8. 第一次模型调用 | `ChatModelAgent.Run` -> `model.WithTools` -> OpenAI `Stream` | system/user messages + ToolInfo -> 流式 Chat Completions request | Tool schema 是调用级 option，不要求修改共享模型实例 |
+| 9. 发出模型事件 | `typedEventSenderModel.Stream` | Assistant message chunks + ToolCall -> `AgentEvent.MessageStream` | event-sender wrapper 复制模型流，一份发给入口，一份继续进入 ReAct 图 |
 | 10. ReAct 分支 | `newReact.toolCallCheck` | 模型消息流中的 `ToolCalls` | 有 ToolCall 走 `CancelCheck -> ToolNode`；无 ToolCall 走终点 |
 | 11. Tool 调度 | `ToolsNode.Invoke` -> `runToolCallTaskByInvoke` | Tool name、arguments、call ID | ToolsNode 按名称定位 endpoint；单 Tool 也使用相同调度机制 |
 | 12. 领域执行 | `invokableTool.InvokableRun` -> `WeatherProvider.Lookup` | JSON -> `WeatherRequest` -> `Weather` -> JSON | `InferTool` 负责 JSON 解码/编码，应用函数只处理类型化输入输出 |
 | 13. Tool 结果回环 | Tool event sender + `schema.ToolMessage` + `afterToolCalls` | result + 原 ToolCallID | Tool event 发给入口；ToolMessage 追加到 ReAct state 后回到 ChatModel |
-| 14. 第二次模型调用 | OpenAI `Generate` | system、user、assistant ToolCall、tool result | 模型根据受控 Tool 数据生成最终 Assistant message |
-| 15. 返回应用 | `flowAgent.run` -> `AsyncIterator.Next` -> `adk.GetMessage` | 带 `AgentName`/`RunPath` 的事件 | 应用先检查 `event.Err`，只选择无 ToolCall 的 Assistant 作为最终回答 |
+| 14. 第二次模型调用 | OpenAI `Stream` | system、user、assistant ToolCall、tool result | 模型根据受控 Tool 数据生成最终 Assistant message stream |
+| 15. 返回应用 | `flowAgent.run` -> `AsyncIterator.Next` -> `adk.GetMessage` | 带 `AgentName`/`RunPath` 的流式事件 | 应用先检查 `event.Err`，再处理流读取错误，拼接消息并关闭保留副本 |
 
 ## ReAct 图的实际拓扑
 
@@ -100,7 +100,9 @@ WeatherProvider error
 
 ### 模型错误
 
-底层 ACL 在创建 request 或调用 Chat Completions 失败时使用 `%w` 返回；EinoExt 转换厂商错误后继续返回给 Compose。Compose 给错误增加节点路径，ChatModelAgent 再通过 `AgentEvent.Err` 交给入口。模型失败不会进入 Tool，也不会生成伪成功的最终回答。
+底层 ACL 在创建 request 或建立 Chat Completions stream 失败时使用 `%w` 返回；Compose 给错误增加节点路径，ChatModelAgent 再通过 `AgentEvent.Err` 交给入口。模型已经返回 StreamReader 后发生的中途错误则由 `adk.GetMessage` 在消费消息流时返回，入口同样用 `%w` 保留错误链。两种错误都不会生成伪成功的最终回答。
+
+阶段 6 的流内错误测试证明：Observer 已收到 ChatModel `started`，但中途错误没有进入 ChatModel `OnError`。因此 `AgentEvent.Err`、消息流读取结果和 Callback 必须联合使用，Callback 不能作为唯一错误通道。
 
 ### context 取消
 
@@ -110,10 +112,10 @@ CLI 创建的 ctx 依次传入 Runner、flowAgent、ChatModelAgent、Compose、E
 
 `adk.WithCallbacks` 把 Observer 作为 per-run option 注入。`flowAgent` 首先为 Agent 设置 `RunInfo`；Compose 的 Graph、Chain、Lambda、ChatModel 和 Tool 节点继承同一组 handlers 并替换各自的 `RunInfo`。
 
-- OpenAI ACL 在 `Generate` 内调用 `OnStart`、`OnEnd` 或 `OnError`。
+- OpenAI ACL 在 `Stream` 建立阶段触发开始、流式输出或立即错误时点；流返回后的读取错误不会再进入 `OnError`。
 - InferTool 本身不声明已处理 Callback，因此 ToolsNode 自动为它包装 Callback。
 - Observer 不修改 callback input/output，只记录组件、名称、类型、状态、耗时和错误类别。
-- Callback 是观测旁路，不负责把错误送回应用；业务正确性仍以 `AgentEvent.Err` 和 `errors.Is` 为准。
+- Callback 是观测旁路，不负责把错误送回应用；业务正确性以 `AgentEvent.Err`、消息流读取错误和 `errors.Is` 为准。
 
 ## 生命周期结论
 
@@ -124,6 +126,6 @@ CLI 创建的 ctx 依次传入 Runner、flowAgent、ChatModelAgent、Compose、E
 | 每次 Query | 建立 run context、per-run callbacks、Agent iterator，并创建/编译本次 ReAct Graph |
 | 每次 ChatModel 节点 | 通过调用级 `model.WithTools` 传递当前 ToolInfo |
 | 每次 ToolCall | 按 call ID 创建 Tool event 和 ToolMessage，二者共享同一领域结果 |
-| 执行结束 | generator 关闭；flowAgent 补充 AgentName/RunPath；应用把 iterator 消费到关闭 |
+| 执行结束 | generator 关闭；flowAgent 补充 AgentName/RunPath；应用把 iterator 消费到关闭，并关闭每个已消费事件中保留的消息流副本 |
 
 精确源码入口和推荐阅读顺序见 [source-map.md](source-map.md)。

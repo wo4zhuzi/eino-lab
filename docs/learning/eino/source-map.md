@@ -20,8 +20,8 @@
 | 4 | [`adk/chatmodel.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/chatmodel.go#L855) `prepareExecContext`、`buildRunFunc`、`Run` | Agent 何时读取 ToolInfo、冻结配置并选择 ReAct？ |
 | 5 | [`adk/react.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/react.go#L312) `genToolInfos`、`newReact` | ChatModel 和 ToolsNode 如何形成循环？ |
 | 6 | [`components/model/option.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/model/option.go#L115) `WithTools`、`GetCommonOptions` | Tool schema 如何作为调用级配置传给模型？ |
-| 7 | [EinoExt OpenAI `chatmodel.go`](https://github.com/cloudwego/eino-ext/blob/components/model/openai/v0.1.13/components/model/openai/chatmodel.go#L198) `NewChatModel`、`Generate` | 标准模型组件怎样进入 OpenAI ACL？ |
-| 8 | [ACL OpenAI `chat_model.go`](https://github.com/cloudwego/eino-ext/blob/libs/acl/openai/v0.1.17/libs/acl/openai/chat_model.go#L557) `genRequest`、`Generate` | Eino message/ToolInfo 怎样变成 Chat Completions 请求？ |
+| 7 | [EinoExt OpenAI `chatmodel.go`](https://github.com/cloudwego/eino-ext/blob/components/model/openai/v0.1.13/components/model/openai/chatmodel.go#L250) `NewChatModel`、`Generate`、`Stream` | 标准模型组件怎样进入 OpenAI ACL？ |
+| 8 | [ACL OpenAI `chat_model.go`](https://github.com/cloudwego/eino-ext/blob/libs/acl/openai/v0.1.17/libs/acl/openai/chat_model.go#L835) `genRequest`、`Stream` | Eino message/ToolInfo 怎样变成流式 Chat Completions 请求？ |
 | 9 | [`compose/tool_node.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/tool_node.go#L1044) `ToolsNode.Invoke` | ToolCall 如何按名称和 call ID 调度？ |
 | 10 | [`components/tool/utils/invokable_func.go`](https://github.com/cloudwego/eino/blob/v0.9.12/components/tool/utils/invokable_func.go#L38) `InferTool`、`InvokableRun` | JSON schema、解码、领域函数和编码怎样衔接？ |
 | 11 | [`adk/wrappers.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/wrappers.go#L261) model/tool event sender | Assistant 和 Tool 结果怎样变成 AgentEvent？ |
@@ -47,12 +47,12 @@ WeatherAgent.Query
                         │   ├── AddToolsNode
                         │   └── branches / loop edges
                         ├── Chain.Compile
-                        └── Runnable.Invoke
-                            ├── OpenAI.Generate
+                        └── Runnable.Stream
+                            ├── OpenAI.Stream
                             ├── ToolsNode.Invoke
                             │   └── InferTool.InvokableRun
                             │       └── WeatherProvider.Lookup
-                            └── OpenAI.Generate
+                            └── OpenAI.Stream
 ```
 
 ## 核心抽象
@@ -63,7 +63,7 @@ WeatherAgent.Query
 | `tool.BaseTool` | `InferTool` 返回对象 | 提供模型可见的名称、描述与参数 schema | schema 变化会影响模型请求和 Tool 参数 |
 | `tool.InvokableTool` | `weather_lookup` | 接收 JSON arguments，返回字符串结果或 error | 可换实现；ToolsNode 调度不变 |
 | `adk.Agent` | `ChatModelAgent` | 选择无 Tool/有 Tool 路径并发出 AgentEvent | 替换 Agent 会改变主要控制流 |
-| `adk.Runner` | 非流式 Runner | 创建输入、进入 flowAgent、管理运行生命周期 | 阶段 6 只改 streaming flag，不替换 Runner |
+| `adk.Runner` | 流式 Runner | 创建输入、进入 flowAgent、管理运行生命周期 | 阶段 6 只改 streaming flag，没有替换 Runner |
 | `compose.Graph` | ADK 内部创建的 ReAct Graph | ChatModel/Tool 分支、循环、state 和节点错误路径 | 应用不直接操作这张内部图 |
 | `callbacks.Handler` | `Observer.Handler()` | per-run 观测组件时点 | 可换日志/Trace 后端，不应改变业务结果 |
 | `WeatherProvider` | 静态实现；测试故障实现 | 应用领域依赖边界，不属于 Eino | 可换真实天气服务，不影响 Eino Tool 契约 |
@@ -78,7 +78,7 @@ WeatherAgent.Query
 | Agent 中间件 | `ChatModelAgentConfig.Handlers` | 未配置 | 可改写模型 state/Tool；可能触发每次运行重建图 |
 | per-run 观测 | `adk.WithCallbacks` | 每次 Query 注入 Observer | 不应保存未同步的跨请求可变状态 |
 | 取消 | `context.Context` 与 ADK cancel option | 当前只用 deadline ctx | 额外 cancel mode 会引入中断安全点，不在本阶段范围 |
-| 流式模式 | `RunnerConfig.EnableStreaming` | `false` | 阶段 6 的唯一迁移变量 |
+| 流式模式 | `RunnerConfig.EnableStreaming` | `true` | 阶段 6 的唯一迁移变量，已完成验证 |
 
 ## 生命周期与隐式行为
 
@@ -97,6 +97,7 @@ WeatherAgent.Query
 | Tool JSON 解码 | `InferTool.InvokableRun` | ToolsNode `%w` -> Compose `NodeRunError` | `internal` |
 | Provider 业务错误 | `weather_lookup` 与 InferTool `%w` | ToolsNode `%w` -> Compose `NodeRunError` | `unsupported_city` / `weather_unavailable` |
 | Provider deadline | Provider ctx error | 同上 | `deadline_exceeded` |
+| 模型流中途错误 | ACL `StreamReader` 返回错误块 | `adk.GetMessage` 消费消息流 | 保留原错误链；不依赖 Callback `OnError` |
 | ReAct 最大轮次 | ChatModel state pre-handler | Compose `NodeRunError` -> `AgentEvent.Err` | `internal`，原始错误仍可 unwrap |
 
 `compose.internalError.Unwrap()` 返回原始错误，因此增加 `[NodeRunError]` 和节点路径只改善定位，不会破坏 `errors.Is`。
@@ -107,7 +108,7 @@ WeatherAgent.Query
 - [`adk/callback.go`](https://github.com/cloudwego/eino/blob/v0.9.12/adk/callback.go#L116)：flowAgent 为 Agent 注入 `RunInfo`。
 - [`compose/utils.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/utils.go#L100)：统一执行 `OnStart -> component -> OnEnd/OnError`。
 - [`compose/tool_node.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/tool_node.go#L892)：Tool 调用前替换为 Tool 自己的 `RunInfo`。
-- ACL OpenAI `Generate`：模型组件显式触发 `OnStart`、`OnEnd`、`OnError`。
+- ACL OpenAI `Stream`：建立流时触发开始、流式输出或立即错误时点；流内错误由消费者读取。
 
 ## 已关闭的文档版本问题
 

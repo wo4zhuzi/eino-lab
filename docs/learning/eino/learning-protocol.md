@@ -8,10 +8,10 @@
 | 源码来源 | `repository`：`https://github.com/cloudwego/eino` |
 | 框架版本 | 已确认 `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L2：运行与诊断 |
-| 当前阶段 | 阶段 5：源码链路已完成；下一步阶段 6 |
-| 当前决策门 | 无；决策门 2 已通过，下一决策门为阶段 6 后的决策门 3 |
-| 当前能力等级 | L1 已验收，L2 尚未验收 |
-| 最近更新 | 2026-07-15 |
+| 当前阶段 | 阶段 6：单变量流式迁移已完成；阶段 7 待验收 |
+| 当前决策门 | 决策门 3：等待用户确认 L2 验收结论 |
+| 当前能力等级 | L2 技术验收项已满足，等待决策门 3 确认 |
+| 最近更新 | 2026-07-17 |
 
 ## 输入解析
 
@@ -162,7 +162,7 @@ go -C "$EINO_EXAMPLES_DIR" run ./adk/intro/chatmodel
 - 业务目标：用户输入城市，Agent 自主调用 `weather_lookup` Tool 获取天气并组织回答；在线 CLI 使用 EinoExt OpenAI 兼容模型，默认测试完全离线且可重复。
 - 根模块：`github.com/wo4zhuzi/eino-lab`，Go directive 使用 `1.26.0`；直接依赖锁定 Eino `v0.9.12` 与 EinoExt OpenAI `v0.1.13`。
 - 代码目录：`examples/diagnosable-weather-agent/`。
-- 第一版运行模式：非流式；`RunnerConfig.EnableStreaming=false`。流式模式只在阶段 6 作为单变量迁移引入。
+- 第一版运行模式：阶段 4 使用非流式；阶段 6 已把唯一变量迁移为 `RunnerConfig.EnableStreaming=true`。
 - 错误策略：Tool 返回原始错误并用 `%w` 补充上下文，ToolsNode 再按源码通过 `%w` 包装到 `AgentEvent.Err`；入口使用 `errors.Is` 分类。禁止使用 `WrapToolWithErrorHandler` 把错误转成普通 Tool 字符串，否则会掩盖 L2 错误传播。
 
 ### 正常路径
@@ -208,7 +208,7 @@ CLI query
 | `utils.InferTool` | `weather.go` 构造 `weather_lookup` | Go struct 推导 Tool schema 并解码 JSON 参数 |
 | `ChatModelAgent` ReAct | `agent.go` 配置 Model 与 ToolsConfig | 模型调用、ToolCall、Tool result、最终回答形成闭环 |
 | `Runner.Query` / `AgentEvent` | `agent.go` | 生命周期与错误经事件通道返回应用入口 |
-| `adk.GetMessage` | `agent.go` | 当前非流式可取消息，并为阶段 6 流式迁移保留统一入口 |
+| `adk.GetMessage` | `agent.go` | 从流式 AgentEvent 拼接消息；入口随后关闭事件中保留的流副本 |
 | per-run Callbacks | `observer.go`，通过 `adk.WithCallbacks` 注入 | 观测 Agent/ChatModel/Tool 的开始、结束、错误和耗时 |
 | `context.Context` | `main.go` 到 Provider 全链路 | deadline/cancel 不被 Tool 或 Agent 截断 |
 
@@ -311,8 +311,55 @@ go run ./examples/diagnosable-weather-agent "What is the weather in Beijing?"
 | 3. 纵向项目设计 | 已完成 | 本协议更新 | 决策门 2 已于 2026-07-15 通过 |
 | 4. 运行闭环 | 已完成 | 示例代码、`failure-matrix.md` | 离线测试、竞态检测、vet、在线冒烟 |
 | 5. 源码链路 | 已完成 | `runtime-path.md`、`source-map.md` | 锁定版本文件、符号、调用关系与现有测试 |
-| 6. 单变量迁移 | 待开始 | 流式迁移预测与结果 | 修改前后回归测试 |
-| 7. L2 验收 | 待开始 | 验收记录 | 决策门 3 |
+| 6. 单变量迁移 | 已完成 | 流式迁移预测与结果 | 分块、关闭、流内错误、全量回归与在线冒烟 |
+| 7. L2 验收 | 等待确认 | 本协议验收记录 | 决策门 3 |
+
+## 阶段 6：流式迁移预测
+
+记录时间：2026-07-17，代码修改前。
+
+### 单一变量
+
+只把 `NewWeatherAgent` 中的 `RunnerConfig.EnableStreaming` 从 `false` 改为 `true`。不更换 Eino/EinoExt 版本，不改变 Agent、Tool、Provider、Callback 的公开契约，也不同时引入流式 Tool。
+
+### 修改前预测
+
+| 问题 | 预测 |
+|---|---|
+| 应变化的文件和抽象 | `agent.go` 切换 Runner 标志，并让入口完整消费、拼接和关闭 `AgentEvent` 的消息流；`agent_test.go` 增加分块成功、流关闭和流内错误测试；相关学习文档更新运行模式与实证 |
+| 不应变化的层 | `weather.go` 的 Tool schema、`WeatherProvider`、三类 sentinel error、在线模型配置和 Observer 记录字段保持不变 |
+| 运行链路分叉 | `Runner.Query` 仍进入同一 flowAgent 和 ChatModelAgent ReAct 图；仅在 `ChatModelAgent` 执行处分叉为 `runnable.Stream`，模型成功输出通过 `MessageStream` 到达 `AgentEvent` |
+| 预期新错误 | 模型已经成功返回 StreamReader 后发生的读取错误从 `adk.GetMessage` 返回，不保证触发 ChatModel Callback `OnError`；入口必须把它包装后返回，不能只检查 `AgentEvent.Err` |
+| 资源所有权 | `adk.GetMessage` 会复制消息流并消费其中一份；应用不再使用返回事件时，必须显式关闭事件中保留的流副本，不能只依赖 `SetAutomaticClose` 的 GC 兜底 |
+| 回归预期 | 正常 ReAct 仍是两次模型调用和一次 Tool 调用；超时、业务错误、依赖不可用仍可由 `errors.Is` 分类，Tool Callback 断言不变 |
+
+### 阶段验收
+
+- 流式分块最终消息可正确拼接，且实际走 `ToolCallingChatModel.Stream`。
+- 消费成功与消费失败时都关闭入口拥有的消息流。
+- 流内错误由入口返回并保留错误链；测试证明不能只依赖 Callback `OnError`。
+- 原有正常路径、三类异常、竞态检测和静态检查全部回归通过。
+
+### 实际结果
+
+| 预测 | 实际结果 | 结论 |
+|---|---|---|
+| 仅 Runner 执行分支变化 | 生产代码只切换 `EnableStreaming`，并在入口增加消息流消费与关闭；Tool、Provider、Observer 字段和依赖版本未变 | 理解正确 |
+| 两次模型调用仍形成 ReAct | scripted model 的 `Stream` 被调用两次，第一次产生 ToolCall，第二次返回两个回答分块；最终内容正确拼接 | 理解正确 |
+| 流副本由入口显式关闭 | `adk.GetMessage` 返回后关闭保留副本；测试再次 `Recv` 得到 `schema.ErrRecvAfterClosed` | 理解正确 |
+| 流内错误不依赖 `OnError` | ChatModel `started` Callback 已触发，但中途流错误未产生 ChatModel `failed`；错误由 `adk.GetMessage` 返回且 `errors.Is` 保留 | 理解正确，Callback 与流错误是两条观测通道 |
+| 原异常语义不变 | 超时、业务错误和依赖不可用测试继续通过，Tool Callback 分类不变 | 无隐式耦合 |
+| 在线模型支持流式主路径 | 2026-07-17 沙箱外在线冒烟成功：两次 OpenAI 流调用之间执行一次 `weather_lookup`，最终回答与静态数据一致，退出码 0 | 已验证真实 EinoExt 流式边界 |
+
+验证命令：
+
+```bash
+GOCACHE=/private/tmp/eino-lab-gocache go test ./examples/diagnosable-weather-agent/... -run 'TestWeatherAgentReAct|TestWeatherAgentStreamError|TestConsumeAgentEventMessageClosesRetainedStream' -count=1 -v
+GOCACHE=/private/tmp/eino-lab-gocache go test ./... -count=1
+GOCACHE=/private/tmp/eino-lab-gocache go test -race ./examples/diagnosable-weather-agent/... -count=1
+GOCACHE=/private/tmp/eino-lab-gocache go vet ./...
+go run ./examples/diagnosable-weather-agent "北京天气怎么样？"
+```
 
 ## L2 验收标准
 
@@ -325,15 +372,21 @@ go run ./examples/diagnosable-weather-agent "What is the weather in Beijing?"
 | 业务错误可诊断 | 已验证 | `ErrUnsupportedCity` 错误链与 `unsupported_city` 分类 |
 | 依赖不可用可诊断 | 已验证 | `ErrWeatherUnavailable` 错误链与 `weather_unavailable` 分类 |
 | 端到端运行/源码链路 | 已验证 | 在线天气请求、`runtime-path.md`、`source-map.md` |
-| 单变量迁移 | 待验证 | 迁移前预测、流式测试与差异结论 |
+| 单变量迁移 | 已验证 | 迁移前预测、分块与关闭测试、流内错误测试、在线流式冒烟 |
 
-当前推荐结论：阶段 0 至阶段 5 已完成，L1 已验收；尚未完成单变量流式迁移，因此 L2 未验收，更不能视为生产就绪。
+当前推荐结论：阶段 0 至阶段 6 和全部 L2 技术验收项已完成，建议通过决策门 3，将本轮学习等级确认为 L2。该结论只表示能够运行和诊断本纵向主路径，不代表系统生产就绪。
+
+## 决策门 3：目标等级验收
+
+- 推荐答案：通过 L2 验收。
+- 选择依据：官方完整示例、自定义正常路径、三类异常、端到端运行/源码链路和一次单变量流式迁移均有实际运行证据。
+- 仍在范围外：逐 token 对外输出、模型重试/failover、checkpoint、多 Agent、RAG、长期记忆、安全、容量、部署、回滚和灾备。
+- 用户决定：待确认。
+- 确认日期：待确认。
 
 ## 问题债务
 
-| 问题 | 当前假设 | 影响范围 | 验证方式 | 最晚解决阶段 |
-|---|---|---|---|---|
-| 流式错误的观测策略 | 应从 StreamReader/AgentEvent 显式采集，不能只依赖 Callback `OnError` | L2 故障诊断 | 流内错误注入测试 | 阶段 6 |
+当前没有阻塞 L2 验收的问题债务。流式错误观测问题已在阶段 6 关闭：入口显式消费消息流错误，Callback 仅作为组件生命周期旁路。
 
 官网版本问题已在阶段 5 关闭：当前主路径全部使用 tag 源码和精确模块版本核对；滚动文档不再作为未追踪 API 的版本证据。
 
@@ -347,4 +400,4 @@ go run ./examples/diagnosable-weather-agent "What is the weather in Beijing?"
 
 ## 下一步
 
-进入阶段 6：只把 `RunnerConfig.EnableStreaming` 从 `false` 改为 `true`。修改前先记录预测，再调整测试和入口的流式消费，验证 stream 关闭、流内错误与 Callback 的边界；Agent、Tool 和 Provider 契约保持不变。
+等待用户确认决策门 3。推荐通过 L2 验收；确认后只更新协议状态，不自动扩展到 L3 或生产就绪工作。

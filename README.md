@@ -4,7 +4,7 @@ CloudWeGo Eino 学习与实践仓库，当前锁定 Eino `v0.9.12` 和 Go `1.26.
 
 ## 示例
 
-- [可诊断天气 Agent](examples/diagnosable-weather-agent/README.md)：ADK `ChatModelAgent + Tool + Runner + Callback` 的非流式运行与故障诊断。
+- [可诊断天气 Agent](examples/diagnosable-weather-agent/README.md)：ADK `ChatModelAgent + Tool + Runner + Callback` 的流式运行与故障诊断。
 
 ## 学习文档
 

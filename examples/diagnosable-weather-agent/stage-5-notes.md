@@ -4,12 +4,14 @@
 
 本文保存学习 Eino ADK 过程中最容易混淆、但对排障最重要的问题：谁选择 Tool、谁执行 Tool、ToolCall 和 Tool 结果是谁生成的、失败由谁判断、为什么失败后不再调用模型，以及 `AgentEvent` 和 Callback 分别负责什么。
 
+本文记录阶段 5 完成时的非流式基线。阶段 6 已把 Runner 单变量迁移为流式；当前实现与验证结果以[示例 README](README.md)和[学习协议](../../docs/learning/eino/learning-protocol.md)为准。
+
 验证范围：
 
 - Go `1.26.3`，模块 directive 为 `go 1.26.0`。
 - Eino `v0.9.12`。
 - EinoExt OpenAI `v0.1.13`。
-- 当前示例为单 Agent、单本地 Tool、非流式 Runner。
+- 本文追踪的阶段 5 基线为单 Agent、单本地 Tool、非流式 Runner。
 - 默认验证使用离线 scripted model，不依赖真实模型服务。
 
 详细源码入口见[源码导航](../../docs/learning/eino/source-map.md)，完整故障实验见[故障矩阵](../../docs/learning/eino/failure-matrix.md)。
@@ -301,9 +303,9 @@ Tool 能力在调用前必须存在，并在本次运行中对 Agent 可见。To
 
 不是。`StaticWeatherProvider` 使用写死的三城市 `map`。它只是为了隔离真实网络并稳定验证 Agent 链路。
 
-### 15. 当前是流式还是非流式？
+### 15. 阶段 5 基线是流式还是非流式？
 
-非流式。Tool 是 `InvokableTool`，Runner 设置 `EnableStreaming=false`。模型输出流式与 Tool 输出流式是两个不同维度。
+阶段 5 基线是非流式：Tool 是 `InvokableTool`，Runner 设置 `EnableStreaming=false`。阶段 6 已把 Runner 改为 `EnableStreaming=true`，Tool 仍是非流式；模型输出流式与 Tool 输出流式是两个不同维度。
 
 ## 用故障位置选择排查入口
 

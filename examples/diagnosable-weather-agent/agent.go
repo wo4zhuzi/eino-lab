@@ -53,7 +53,7 @@ func NewWeatherAgent(
 	return &WeatherAgent{
 		runner: adk.NewRunner(ctx, adk.RunnerConfig{
 			Agent:           agent,
-			EnableStreaming: false,
+			EnableStreaming: true,
 		}),
 	}, nil
 }
@@ -84,7 +84,7 @@ func (a *WeatherAgent) Query(
 			return nil, fmt.Errorf("weather agent event: %w", event.Err)
 		}
 
-		message, _, err := adk.GetMessage(event)
+		message, err := consumeAgentEventMessage(event)
 		if err != nil {
 			return nil, fmt.Errorf("read agent message: %w", err)
 		}
@@ -100,4 +100,21 @@ func (a *WeatherAgent) Query(
 		return nil, ErrNoFinalResponse
 	}
 	return final, nil
+}
+
+func consumeAgentEventMessage(event *adk.AgentEvent) (*schema.Message, error) {
+	message, retainedEvent, err := adk.GetMessage(event)
+	closeAgentEventMessageStream(retainedEvent)
+	return message, err
+}
+
+func closeAgentEventMessageStream(event *adk.AgentEvent) {
+	if event == nil || event.Output == nil || event.Output.MessageOutput == nil {
+		return
+	}
+
+	output := event.Output.MessageOutput
+	if output.IsStreaming && output.MessageStream != nil {
+		output.MessageStream.Close()
+	}
 }

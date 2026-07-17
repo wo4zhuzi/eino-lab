@@ -140,7 +140,7 @@ Tool 实现必须在调用前已经存在，但可见集合不一定永久写死
 
 ### 当前哪些内容是写死的
 
-`已验证` 当前固定的是 Tool 名称和描述、只支持三个城市的静态天气数据、单 Tool 配置、强制调用 Tool 的 Instruction，以及非流式 Runner。用户输入和模型生成的 `city` 参数不是写死的。
+`已验证` 当前固定的是 Tool 名称和描述、只支持三个城市的静态天气数据、单 Tool 配置、强制调用 Tool 的 Instruction，以及流式 Runner。用户输入和模型生成的 `city` 参数不是写死的。
 
 `WeatherProvider` 接口已经隔离数据来源。后续把 `StaticWeatherProvider` 单变量替换为调用真实天气 API 的实现时，可以保持 `NewWeatherTool`、Agent 注册和 ReAct 链路不变：
 
@@ -149,11 +149,11 @@ Tool 实现必须在调用前已经存在，但可见集合不一定永久写死
 以后：weather_lookup -> HTTPWeatherProvider   -> 天气 API
 ```
 
-这只是扩展边界说明，不代表阶段 6 迁移测试已经执行。
+这只是 Provider 扩展边界说明；阶段 6 改变的是 Runner 流式模式，没有替换 Provider。
 
 ### 流式与非流式
 
-`已验证` 当前示例是非流式：`NewWeatherTool` 返回 `tool.InvokableTool`，Runner 设置 `EnableStreaming=false`。模型和 Tool 都完成整个结果后再一次性向下游返回。
+`已验证` 当前 Runner 设置 `EnableStreaming=true`，模型通过 `ToolCallingChatModel.Stream` 返回消息流；`NewWeatherTool` 仍是 `tool.InvokableTool`，天气结果不会分块。入口使用 `adk.GetMessage` 拼接模型分块，并显式关闭保留的消息流副本。
 
 流式表示结果产生一部分就传递一部分，需要区分两个层面：
 
@@ -162,7 +162,9 @@ Tool 实现必须在调用前已经存在，但可见集合不一定永久写死
 | 模型输出 | 等完整 Assistant 消息后返回 | 按消息块逐步返回 | 长回答、实时对话展示 |
 | Tool 输出 | 等完整 Tool 结果后返回 | 按结果块逐步返回 | 大规模搜索、日志读取、长报告生成 |
 
-天气结果只有少量字段，使用非流式更简单合理。流式会增加流读取、关闭、拼接和中途错误处理成本，应在首包延迟或渐进展示确实有价值时采用。
+阶段 6 已验证两个模型分块可以拼接，中途流错误从消息流返回且不会进入 ChatModel `OnError`。因此入口必须同时检查 `AgentEvent.Err` 和消息流消费错误，不能只依赖 Callback。
+
+当前 CLI 会等完整消息拼接后一次性输出，并没有逐 token 展示。这里采用流式是为了验证 Eino 的流所有权和故障边界；天气回答很短，单从产品体验看非流式仍然更简单。
 
 ## 故障语义
 
@@ -174,7 +176,7 @@ Tool 实现必须在调用前已经存在，但可见集合不一定永久写死
 
 ## 已知限制
 
-- 第一版固定 `EnableStreaming=false`；流式消费在学习阶段 6 单独迁移。
+- Runner 已启用流式，但 `WeatherAgent.Query` 返回完整 `schema.Message`，调用方不能渐进消费 token。
 - 天气数据是进程内静态数据，只支持北京、上海和深圳，不代表实时天气。
 - 在线模型是否正确选择 Tool 具有非确定性，因此在线运行只作为冒烟；回归依据是 scripted ChatModel 离线测试。
 - 当前示例不包含重试、failover、checkpoint、多 Agent、RAG 或生产级日志后端。
