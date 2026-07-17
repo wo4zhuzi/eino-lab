@@ -109,7 +109,7 @@ flowchart LR
 | `v0.9.12` 是当前已确认的最新非预发布 tag | 官方 Git refs、tag 浅克隆 HEAD | 高 | 已验证 |
 | 当前推荐入口是 `ChatModelAgent + Runner`，Tool 触发 ReAct | tag README、`adk/runner.go`、`adk/chatmodel.go`、官方示例、纵向项目 | 高 | 源码、官方示例和自定义项目均已验证 |
 | Compose 用于需要精确控制的 Graph/Workflow | tag README、`compose.Runnable`、`Graph.Compile` 与 ADK ReAct 运行链路 | 高 | ADK 内部 ReAct Graph 已运行验证；独立 Compose 项目不在本轮范围 |
-| Callbacks 覆盖组件生命周期，但流读取期错误不会进入 `OnError` | callbacks 包文档与接口源码 | 高 | 源码已验证，故障实验待执行 |
+| Callbacks 覆盖组件生命周期，但流读取期错误不会进入 `OnError` | callbacks 包文档、接口源码与阶段 6 流内错误测试 | 高 | 源码与实验均已验证 |
 
 ## 运行与源码链路
 
@@ -396,6 +396,7 @@ go run ./examples/diagnosable-weather-agent "北京天气怎么样？"
 - [架构图与责任边界](architecture.md)
 - [阶段 4 故障矩阵](failure-matrix.md)
 - [阶段 5 运行链路](runtime-path.md)
+- [阶段 6 流式处理学习笔记](streaming.md)
 - [阶段 5 源码导航](source-map.md)
 
 ## 下一步

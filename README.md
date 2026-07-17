@@ -12,4 +12,5 @@ CloudWeGo Eino 学习与实践仓库，当前锁定 Eino `v0.9.12` 和 Go `1.26.
 - [架构全景](docs/learning/eino/architecture.md)
 - [证据表](docs/learning/eino/evidence.md)
 - [天气 Agent 运行链路](docs/learning/eino/runtime-path.md)
+- [流式处理学习笔记](docs/learning/eino/streaming.md)
 - [Eino v0.9.12 源码导航](docs/learning/eino/source-map.md)
