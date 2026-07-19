@@ -7,9 +7,9 @@
 | 文件 | 符号/位置 | 作用 |
 |---|---|---|
 | `examples/compose-quality-gate/gate.go` | `NewQualityGate` | 创建类型化 Graph、注册 Local State、编译 Runnable |
-| `examples/compose-quality-gate/gate.go` | `addGateNodes` | 定义 validate、inspect、remediate、approve、manual 节点 |
-| `examples/compose-quality-gate/gate.go` | `addGateTopology` | 声明 Branch、循环边、approve/manual 到 END 的边 |
-| `examples/compose-quality-gate/gate.go` | `newFinalizeNode` | 读取 Local State 并生成最终结果 |
+| `examples/compose-quality-gate/topology.go` | `addGateNodes` | 将五个命名方法包装为 Lambda 并注册到 Graph |
+| `examples/compose-quality-gate/topology.go` | `addGateTopology`、`gateRouter.route` | 声明 Branch、循环边、approve/manual 到 END 的边 |
+| `examples/compose-quality-gate/nodes.go` | `gateNodes` 的五个节点方法 | 隔离 validate、inspect、remediate、approve、manual 的业务逻辑 |
 | `examples/compose-quality-gate/snapshot.go` | `TopologySnapshotter.OnFinish` | 将 `GraphInfo` 复制为可比较快照 |
 | `examples/compose-quality-gate/observer.go` | `Observer.Handler` | 注册运行级 Callback，不记录内容正文 |
 

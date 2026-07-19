@@ -21,6 +21,19 @@ START -> validate -> inspect -> Branch
 
 `Inspector` 是唯一外部能力边界。默认 `ruleInspector` 是确定性本地实现，不调用真实模型、审核服务或网络。
 
+## 阅读顺序
+
+建议按职责从外到内阅读，不要从单个文件第一行一路读到底：
+
+1. `main.go`：程序入口，只看配置、构建和一次 `Review` 调用。
+2. `gate.go`：公开类型、Local State、`NewQualityGate`、`Compile` 和 `Review`。
+3. `topology.go`：Lambda 节点注册、Branch 目标和 Edge 连接。
+4. `nodes.go`：validate、inspect、remediate、approve、manual 的具体业务逻辑。
+5. `observer.go` 与 `snapshot.go`：运行期和编译期观测扩展。
+6. `*_test.go`：正常路径、故障、并发隔离和扩展边界证据。
+
+这样可以先回答“程序如何运行”，再深入“每个节点做什么”。
+
 ## 前置条件
 
 - Go `1.26.3`，以根 `go.mod` 的 `go 1.26.0` 为最低项目约束。

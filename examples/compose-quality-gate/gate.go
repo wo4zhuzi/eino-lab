@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/compose"
 )
@@ -109,8 +108,9 @@ func NewQualityGate(ctx context.Context, inspector Inspector, config GateConfig)
 			return &gateState{}
 		}),
 	)
+	nodes := &gateNodes{inspector: inspector}
 
-	if err := addGateNodes(graph, inspector, config); err != nil {
+	if err := addGateNodes(graph, nodes); err != nil {
 		return nil, err
 	}
 	if err := addGateTopology(graph, config); err != nil {
@@ -136,146 +136,4 @@ func (g *QualityGate) Review(ctx context.Context, request ReviewRequest, opts ..
 
 func (g *QualityGate) Topology() TopologySnapshot {
 	return g.snapshotter.Snapshot()
-}
-
-func addGateNodes(graph *compose.Graph[ReviewRequest, ReviewResult], inspector Inspector, config GateConfig) error {
-	validate := compose.InvokableLambda(func(ctx context.Context, request ReviewRequest) (gatePayload, error) {
-		if err := ctx.Err(); err != nil {
-			return gatePayload{}, err
-		}
-		content := strings.TrimSpace(request.Content)
-		if content == "" {
-			return gatePayload{}, ErrEmptyContent
-		}
-		return gatePayload{Content: content}, nil
-	})
-	if err := graph.AddLambdaNode(nodeValidate, validate, compose.WithNodeName(nodeValidate)); err != nil {
-		return fmt.Errorf("add %s node: %w", nodeValidate, err)
-	}
-
-	inspect := compose.InvokableLambda(func(ctx context.Context, payload gatePayload) (gatePayload, error) {
-		if err := ctx.Err(); err != nil {
-			return gatePayload{}, err
-		}
-		result, err := inspector.Inspect(ctx, payload.Content)
-		if err != nil {
-			return gatePayload{}, fmt.Errorf("inspect content: %w", err)
-		}
-		if err := ctx.Err(); err != nil {
-			return gatePayload{}, err
-		}
-		if result.Score < 0 || result.Score > 10 {
-			return gatePayload{}, fmt.Errorf("%w: score %d is outside [0,10]", ErrInvalidInspection, result.Score)
-		}
-
-		payload.Score = result.Score
-		payload.Reason = result.Reason
-		if err := compose.ProcessState[*gateState](ctx, func(_ context.Context, state *gateState) error {
-			state.Attempts++
-			state.Audit = append(state.Audit, AuditEntry{
-				Attempt: state.Attempts,
-				Score:   result.Score,
-				Reason:  result.Reason,
-			})
-			return nil
-		}); err != nil {
-			return gatePayload{}, fmt.Errorf("record inspection state: %w", err)
-		}
-		return payload, nil
-	})
-	if err := graph.AddLambdaNode(nodeInspect, inspect, compose.WithNodeName(nodeInspect)); err != nil {
-		return fmt.Errorf("add %s node: %w", nodeInspect, err)
-	}
-
-	remediate := compose.InvokableLambda(func(ctx context.Context, payload gatePayload) (gatePayload, error) {
-		if err := ctx.Err(); err != nil {
-			return gatePayload{}, err
-		}
-		payload.Content = strings.TrimSpace(payload.Content) + "\n[remediated]"
-		return payload, nil
-	})
-	if err := graph.AddLambdaNode(nodeRemediate, remediate, compose.WithNodeName(nodeRemediate)); err != nil {
-		return fmt.Errorf("add %s node: %w", nodeRemediate, err)
-	}
-
-	if err := graph.AddLambdaNode(nodeApprove, newFinalizeNode(ReviewApproved), compose.WithNodeName(nodeApprove)); err != nil {
-		return fmt.Errorf("add %s node: %w", nodeApprove, err)
-	}
-	if err := graph.AddLambdaNode(nodeManual, newFinalizeNode(ReviewManualReview), compose.WithNodeName(nodeManual)); err != nil {
-		return fmt.Errorf("add %s node: %w", nodeManual, err)
-	}
-
-	return nil
-}
-
-func addGateTopology(graph *compose.Graph[ReviewRequest, ReviewResult], config GateConfig) error {
-	route := compose.NewGraphBranch(
-		func(ctx context.Context, payload gatePayload) (string, error) {
-			if payload.Score >= config.ApprovalThreshold {
-				return nodeApprove, nil
-			}
-
-			var attempts int
-			if err := compose.ProcessState[*gateState](ctx, func(_ context.Context, state *gateState) error {
-				attempts = state.Attempts
-				return nil
-			}); err != nil {
-				return "", fmt.Errorf("read routing state: %w", err)
-			}
-			if attempts >= config.MaxAttempts {
-				return nodeManual, nil
-			}
-			return nodeRemediate, nil
-		},
-		map[string]bool{
-			nodeApprove:   true,
-			nodeManual:    true,
-			nodeRemediate: true,
-		},
-	)
-
-	if err := graph.AddBranch(nodeInspect, route); err != nil {
-		return fmt.Errorf("add review branch: %w", err)
-	}
-
-	edges := [][2]string{
-		{compose.START, nodeValidate},
-		{nodeValidate, nodeInspect},
-		{nodeRemediate, nodeInspect},
-		{nodeApprove, compose.END},
-		{nodeManual, compose.END},
-	}
-	for _, edge := range edges {
-		if err := graph.AddEdge(edge[0], edge[1]); err != nil {
-			return fmt.Errorf("add edge %s -> %s: %w", edge[0], edge[1], err)
-		}
-	}
-	return nil
-}
-
-func newFinalizeNode(status ReviewStatus) *compose.Lambda {
-	return compose.InvokableLambda(func(ctx context.Context, payload gatePayload) (ReviewResult, error) {
-		if err := ctx.Err(); err != nil {
-			return ReviewResult{}, err
-		}
-
-		var attempts int
-		var audit []AuditEntry
-		if err := compose.ProcessState[*gateState](ctx, func(_ context.Context, state *gateState) error {
-			attempts = state.Attempts
-			audit = append([]AuditEntry(nil), state.Audit...)
-			return nil
-		}); err != nil {
-			return ReviewResult{}, fmt.Errorf("read final state: %w", err)
-		}
-
-		return ReviewResult{
-			Status:   status,
-			Content:  payload.Content,
-			Score:    payload.Score,
-			Reason:   payload.Reason,
-			Attempts: attempts,
-			Audit:    audit,
-		}, nil
-	})
 }
