@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | C-01 | 当前项目实际依赖 Eino `v0.9.12` | 已验证 | 根 `go.mod`、`go.sum`；`go list -m` 解析到本机模块缓存 | 高 | 无需变更 |
 | C-02 | 官方示例 commit `171220631f...` 精确依赖 Eino `v0.9.12` | 已验证 | [`eino-examples/go.mod`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/go.mod) 与本机临时克隆 HEAD | 高 | 阶段 2 原样运行示例 |
-| C-03 | 当前工具链为 Go `1.26.3 darwin/arm64` | 已验证 | `go env GOVERSION GOOS GOARCH` | 高 | 阶段 2 记录运行结果 |
+| C-03 | 当前工具链为 Go `1.26.3 darwin/arm64` | 已验证 | `go env GOVERSION GOOS GOARCH`；官方 state 示例实际运行 | 高 | 无需变更 |
 
 ## 主路径证据
 
@@ -44,8 +44,8 @@
 
 | ID | 结论 | 标签 | 精确证据 | 置信度 | 后续验证 |
 |---|---|---|---|---|---|
-| C-19 | 官方 state Graph 示例覆盖 Local State、前后处理器、Branch、循环和最大步数 | 官方说明 | [`compose/graph/state/state_graph.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/compose/graph/state/state_graph.go#L115) | 高 | 阶段 2 原样运行 |
-| C-20 | 官方示例预期第二轮质量达到 7 并结束 | 推断 | 示例中 `mockQualityCheck` 对两次 `[reviewed]` 返回 7，Branch 选择 `END` | 中 | 阶段 2 用实际输出确认 |
+| C-19 | 官方 state Graph 示例覆盖 Local State、前后处理器、Branch、循环和最大步数 | 已验证 | [`compose/graph/state/state_graph.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/compose/graph/state/state_graph.go#L115)；阶段 2 原样运行退出码 0 | 高 | 阶段 4 在自定义项目复现 |
+| C-20 | 官方示例第二轮质量达到 7 并进入 `END` | 已验证 | 实际输出依次为 `round=1, quality=5 -> translate` 和 `round=2, quality=7 -> END` | 高 | 无需变更 |
 
 ## 已识别的证据校正
 

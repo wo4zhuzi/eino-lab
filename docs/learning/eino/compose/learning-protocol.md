@@ -8,8 +8,8 @@
 | 源码来源 | `module`：`github.com/cloudwego/eino@v0.9.12`；官方示例仓库作为辅助证据 |
 | 框架版本 | Eino `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L3：扩展定制 |
-| 当前阶段 | 阶段 1：第一版 Compose 全景图已完成 |
-| 当前决策门 | 决策门 1：等待确认版本与 Graph 主路径 |
+| 当前阶段 | 阶段 3：最小完整纵向项目设计已完成 |
+| 当前决策门 | 决策门 2：等待确认内容质量门禁项目范围 |
 | 最近更新 | 2026-07-19 |
 
 ## 输入解析
@@ -135,8 +135,8 @@ flowchart LR
 - 主要争议：Chain 更简洁但不适合作为显式循环主线；Workflow 的字段映射更强但源码明确不支持循环；checkpoint 属于持久恢复能力，本轮不与 Local State 混学。
 - 证据校正：官方 state 示例关于“闭包不能访问 Branch 状态”的注释不是 Go 语法事实；本协议只采用可由源码证实的运行隔离、互斥访问和嵌套作用域结论。
 - 扩展限制：`GraphCompileCallback` 没有错误返回值，只能观测，不能作为阻止 Graph 编译的策略门禁。
-- 用户决定：待确认。
-- 确认日期：待确认。
+- 用户决定：确认按原计划使用 Graph 主路径和内容质量门禁纵向项目；Obsidian RAG 仅作为问答讨论，不纳入本轮范围。
+- 确认日期：2026-07-19。
 
 ## 官方完整示例
 
@@ -153,7 +153,16 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 ```
 
 - 预期结果：翻译和审校运行两轮；Local State 记录轮次与历史；质量分支第二轮选择 `END`；最终输出包含两次审校痕迹。
-- 实际结果：待决策门 1 通过后在阶段 2 原样运行。
+- 实际命令：
+
+```bash
+export EINO_EXAMPLES_DIR="${TMPDIR:-/tmp}/eino-examples-v0.9.12"
+export GOCACHE="${TMPDIR:-/tmp}/eino-compose-gocache"
+go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
+```
+
+- 实际结果：`已验证` 示例退出码为 0。第一轮 `round=1`、质量 `5/10`，Branch 回到 `translate`；第二轮 `round=2`、质量 `7/10`，Branch 进入 `END`；最终结果包含第一轮历史和第二轮审校结果。
+- 环境说明：首次运行因沙箱不能写默认 Go 构建缓存而失败；将 `GOCACHE` 指向临时目录后，示例逻辑正常运行。该失败不属于 Compose 行为。
 
 ## 最小完整纵向项目候选
 
@@ -166,14 +175,95 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 - 异常候选：空内容业务错误、检查超时、Inspector 不可用、循环超过最大步数。
 - 代码目录：待决策门 2 后创建，候选为 `examples/compose-quality-gate/`。
 
+### 正常路径
+
+```text
+ReviewRequest
+-> validate
+-> inspect
+-> Branch
+   -> approve -> ReviewResult(status=approved)
+   -> remediate -> inspect（有界循环）
+   -> manual -> ReviewResult(status=manual_review)
+```
+
+- `validate`：拒绝空白内容，生成运行负载。
+- `inspect`：调用 `Inspector`，写入评分、原因和运行级审计轨迹。
+- `Branch`：分数达到阈值时进入 `approve`；未达到阈值且仍有尝试次数时进入 `remediate`；达到尝试上限时进入 `manual`。
+- `remediate`：执行确定性补救并回到 `inspect`，不直接绕过复检。
+- `approve/manual`：读取 Local State，返回最终状态、尝试次数和审计摘要。
+
+### 框架机制与使用位置
+
+| Compose 机制 | 使用位置 | 验证重点 |
+|---|---|---|
+| 类型化 `Graph` 与 Lambda | 全部业务节点 | 编译期输入输出类型和拓扑校验 |
+| `GraphBranch` | `inspect` 后 | 只能选择已声明目标；通过、补救、人工三路互斥 |
+| 有界循环 | `remediate -> inspect` | 业务尝试上限和 `WithMaxRunSteps` 双重保护 |
+| Local State | 尝试次数、审计轨迹 | 单次运行内共享；并发调用互相隔离 |
+| `Runnable.Invoke` | 示例入口与测试 | 相同编译产物可重复、并发调用 |
+| 节点路径错误 | `validate`、`inspect` | `errors.Is` 保留根因，同时错误文本包含节点路径 |
+| `GraphCompileCallback` | `Compile` | 生成稳定、不可变的拓扑快照 |
+
+### 外部边界与替代实现
+
+| 边界 | 默认实现 | 替代实现 | 本轮选择 |
+|---|---|---|---|
+| `Inspector` | 测试可控的 scripted inspector | 真实 ChatModel 或内容审核服务 | 默认完全离线，阶段 6 只替换这一项 |
+| 内容补救 | 确定性 Lambda | 模型改写服务 | 保持本轮变量单一，不引入第二个外部依赖 |
+| 审计存储 | Local State 随结果返回 | 数据库或事件流 | 只验证运行级状态，不冒充持久化 |
+
+### 故障与可观测性
+
+| 场景 | 注入位置 | 预期行为 | 证据 |
+|---|---|---|---|
+| 超时 | `Inspector.Inspect` 等待 `ctx.Done()` | `context.DeadlineExceeded` 可由 `errors.Is` 识别，错误包含 `inspect` 节点路径 | 单元测试 |
+| 业务错误 | `validate` 收到空白内容 | 返回稳定的 `ErrEmptyContent`，不调用 Inspector | 单元测试与调用计数 |
+| 依赖不可用 | `Inspector` 返回 `ErrInspectorUnavailable` | 不重试、不伪装成功，保留根因和节点路径 | 单元测试 |
+| 循环失控 | 持续低分且业务上限高于 Graph 步数上限 | 返回 `compose.ErrExceedMaxSteps` | 边界测试 |
+
+- 运行期观测：结果中的尝试次数和审计摘要、节点级 Callback 事件、可解包错误链。
+- 编译期观测：拓扑快照包含 Graph 名称、排序后的节点、边和分支目标，不保留节点实例。
+- 并发边界：同一个 `Runnable` 并发调用，使用 `go test -race` 验证 Local State 和快照读取没有数据竞争。
+
+### 保留与省略
+
+| 能力 | 决定 | 理由 |
+|---|---|---|
+| Graph、Branch、循环、Local State | 保留 | 直接定义本轮 Compose 学习价值 |
+| 最大运行步数和错误链 | 保留 | 覆盖失控保护和诊断能力 |
+| 编译拓扑快照扩展 | 保留 | 满足 L3 真实公开扩展验收 |
+| 真实 ChatModel/审核 API | 省略 | 会引入凭据、网络和非确定性，不影响 Graph 学习目标 |
+| checkpoint/恢复和持久化审计 | 省略 | 与 Local State 是不同问题，应单独学习 |
+| Stream、Agent Tool、RAG、多 Agent | 省略 | 不属于当前纵向项目的必要主链路 |
+| HTTP 服务和生产部署 | 省略 | 本轮目标是 Compose 扩展定制，不做生产就绪评估 |
+
+### 计划验证命令
+
+```bash
+gofmt -w examples/compose-quality-gate/*.go
+go test ./examples/compose-quality-gate
+go test -race ./examples/compose-quality-gate
+go test ./...
+go vet ./...
+go run ./examples/compose-quality-gate
+```
+
+## 决策门 2：纵向项目范围
+
+- 推荐范围：实现离线、可审计的内容质量门禁 Graph；使用 scripted `Inspector`、确定性补救、三路 Branch、有界循环、Local State 和拓扑快照器。
+- 取舍依据：该范围完整触发 Compose 的非线性调度、状态隔离、循环保护、错误路径和公开扩展点，同时不被真实模型、持久化或部署问题干扰。
+- 用户决定：待确认。
+- 确认日期：待确认。
+
 ## 执行阶段
 
 | 阶段 | 状态 | 产物 | 验证 |
 |---|---|---|---|
 | 0. 版本基线 | 已完成 | 本协议、`evidence.md` | `go.mod`、`go.sum`、`go list -m`、示例 commit |
 | 1. 第一版全景图 | 已完成 | `architecture.md`、`evidence.md` | 决策门 1 |
-| 2. 官方完整示例 | 待开始 | 本协议运行记录 | 原样运行命令 |
-| 3. 纵向项目设计 | 待开始 | 本协议 | 决策门 2 |
+| 2. 官方完整示例 | 已完成 | 本协议运行记录 | 官方 state 示例退出码 0 |
+| 3. 纵向项目设计 | 已完成 | 本协议 | 决策门 2 |
 | 4. 运行闭环与扩展 | 待开始 | 示例代码、故障矩阵 | 测试、竞态检测、vet |
 | 5. 源码链路 | 待开始 | 运行链路、源码导航 | 文件与符号引用 |
 | 6. 单变量迁移 | 待开始 | 迁移预测与结果 | 回归测试 |
@@ -183,8 +273,8 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 
 | 验收项 | 当前状态 | 最低证据 |
 |---|---|---|
-| Graph 主路径可解释 | 待确认 | 决策门 1、架构和责任边界 |
-| 官方完整示例可运行 | 待验证 | 原样运行输出 |
+| Graph 主路径可解释 | 已确认 | 决策门 1、架构和责任边界 |
+| 官方完整示例可运行 | 已验证 | 官方 state 示例实际输出 |
 | 自定义 Graph 正常路径 | 待验证 | 分支、循环和状态测试 |
 | 三类故障可诊断 | 待验证 | 超时、业务错误、依赖不可用的错误链和节点路径 |
 | L3 扩展已实现 | 待验证 | 自定义 `GraphCompileCallback` 与兼容边界测试 |
@@ -207,4 +297,4 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 
 ## 下一步
 
-等待用户确认决策门 1。推荐采用 Eino `v0.9.12`、Graph 主路径、官方 state 示例和“内容质量门禁 + 拓扑快照器”纵向项目候选；确认前不创建业务代码。
+等待用户确认决策门 2。推荐按上述离线范围实现“内容质量门禁 + 拓扑快照器”；确认前不创建业务代码。
