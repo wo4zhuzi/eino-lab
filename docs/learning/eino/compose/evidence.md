@@ -47,6 +47,16 @@
 | C-19 | 官方 state Graph 示例覆盖 Local State、前后处理器、Branch、循环和最大步数 | 已验证 | [`compose/graph/state/state_graph.go`](https://github.com/cloudwego/eino-examples/blob/171220631fb7068ead50b7cd964b8c471647117d/compose/graph/state/state_graph.go#L115)；阶段 2 原样运行退出码 0 | 高 | 阶段 4 在自定义项目复现 |
 | C-20 | 官方示例第二轮质量达到 7 并进入 `END` | 已验证 | 实际输出依次为 `round=1, quality=5 -> translate` 和 `round=2, quality=7 -> END` | 高 | 无需变更 |
 
+## 纵向项目证据
+
+| ID | 结论 | 标签 | 精确证据 | 置信度 | 后续验证 |
+|---|---|---|---|---|---|
+| C-21 | 内容质量门禁 Graph 的正常路径覆盖通过、补救循环和人工复核 | 已验证 | `examples/compose-quality-gate/gate_test.go`：`TestQualityGateApprovesAfterRemediation`、`TestQualityGateRoutesToManualReview`；示例运行输出 | 高 | 无需变更 |
+| C-22 | Local State 在同一 Runnable 的并发调用间隔离 | 已验证 | `TestQualityGateLocalStateIsIsolatedAcrossConcurrentRuns`；`go test -race ./examples/compose-quality-gate` | 高 | 无需变更 |
+| C-23 | 业务错误、超时、依赖不可用和超步数错误保留根因并带有可观测分类 | 已验证 | `gate_test.go` 故障测试、`failure-matrix.md`、`Observer.ErrorKind` | 高 | 真实依赖重试策略留待后续 |
+| C-24 | 自定义 `GraphCompileCallback` 可生成稳定、脱离实例引用的嵌套拓扑快照 | 已验证 | `snapshot.go`、`snapshot_test.go`：稳定性、嵌套 Graph、并发 Compile 测试 | 高 | 无需变更 |
+| C-25 | 只替换 `Inspector` 实现不会改变 Graph 拓扑或 Compose 状态边界 | 已验证 | `TestQualityGateInspectorMigrationKeepsGraphTopology`、`source-map.md` 单变量迁移记录 | 高 | 向真实 ChatModel 替换时补充在线冒烟 |
+
 ## 已识别的证据校正
 
 官方 state 示例注释称闭包变量无法在 Branch 中访问，这不是 Go 语言事实。该示例仍能证明 Local State 的公开使用方式，但本协议只把“每次运行生成、互斥访问、嵌套作用域”作为已验证结论。与业务持久化、checkpoint 或跨进程状态有关的结论必须另行验证。

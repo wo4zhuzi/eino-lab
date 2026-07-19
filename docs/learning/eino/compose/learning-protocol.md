@@ -8,8 +8,8 @@
 | 源码来源 | `module`：`github.com/cloudwego/eino@v0.9.12`；官方示例仓库作为辅助证据 |
 | 框架版本 | Eino `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L3：扩展定制 |
-| 当前阶段 | 阶段 3：最小完整纵向项目设计已完成 |
-| 当前决策门 | 决策门 2：等待确认内容质量门禁项目范围 |
+| 当前阶段 | 阶段 7：L3 验收 |
+| 当前决策门 | 决策门 3：等待确认验收结果 |
 | 最近更新 | 2026-07-19 |
 
 ## 输入解析
@@ -164,16 +164,16 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 - 实际结果：`已验证` 示例退出码为 0。第一轮 `round=1`、质量 `5/10`，Branch 回到 `translate`；第二轮 `round=2`、质量 `7/10`，Branch 进入 `END`；最终结果包含第一轮历史和第二轮审校结果。
 - 环境说明：首次运行因沙箱不能写默认 Go 构建缓存而失败；将 `GOCACHE` 指向临时目录后，示例逻辑正常运行。该失败不属于 Compose 行为。
 
-## 最小完整纵向项目候选
+## 最小完整纵向项目
 
 - 原生场景：可审计内容质量门禁 Graph。
 - 业务目标：验证输入后调用可替换 `Inspector` 评分；低分进入补救节点并重新检查，达到阈值后通过，达到最大尝试次数后转人工复核。
-- 预定主链路：`START -> validate -> inspect -> Branch -> remediate/approve/manual -> END`，其中 `remediate -> inspect` 形成受控循环。
+- 主链路：`START -> validate -> inspect -> Branch -> remediate/approve/manual -> END`，其中 `remediate -> inspect` 形成受控循环。
 - 框架身份机制：类型化 Graph、Lambda、Branch、Local State、最大步数、per-run Callback、节点错误路径和自定义编译回调。
 - 外部边界：`Inspector` 接口；默认测试使用确定性实现，不访问真实模型或网络。
 - L3 扩展：自定义拓扑快照器从 `GraphInfo` 复制 Graph 名称、节点、边和分支摘要；不保留节点实例和可变 Graph 引用。
 - 异常候选：空内容业务错误、检查超时、Inspector 不可用、循环超过最大步数。
-- 代码目录：待决策门 2 后创建，候选为 `examples/compose-quality-gate/`。
+- 代码目录：[examples/compose-quality-gate/](../../../../examples/compose-quality-gate/)。
 
 ### 正常路径
 
@@ -253,8 +253,8 @@ go run ./examples/compose-quality-gate
 
 - 推荐范围：实现离线、可审计的内容质量门禁 Graph；使用 scripted `Inspector`、确定性补救、三路 Branch、有界循环、Local State 和拓扑快照器。
 - 取舍依据：该范围完整触发 Compose 的非线性调度、状态隔离、循环保护、错误路径和公开扩展点，同时不被真实模型、持久化或部署问题干扰。
-- 用户决定：待确认。
-- 确认日期：待确认。
+- 用户决定：确认按离线内容质量门禁范围实现。
+- 确认日期：2026-07-19。
 
 ## 执行阶段
 
@@ -264,10 +264,10 @@ go run ./examples/compose-quality-gate
 | 1. 第一版全景图 | 已完成 | `architecture.md`、`evidence.md` | 决策门 1 |
 | 2. 官方完整示例 | 已完成 | 本协议运行记录 | 官方 state 示例退出码 0 |
 | 3. 纵向项目设计 | 已完成 | 本协议 | 决策门 2 |
-| 4. 运行闭环与扩展 | 待开始 | 示例代码、故障矩阵 | 测试、竞态检测、vet |
-| 5. 源码链路 | 待开始 | 运行链路、源码导航 | 文件与符号引用 |
-| 6. 单变量迁移 | 待开始 | 迁移预测与结果 | 回归测试 |
-| 7. L3 验收 | 待开始 | 验收记录 | 决策门 3 |
+| 4. 运行闭环与扩展 | 已完成 | 示例代码、故障矩阵 | 测试、竞态检测、vet |
+| 5. 源码链路 | 已完成 | `runtime-path.md`、`source-map.md` | 文件与符号引用 |
+| 6. 单变量迁移 | 已完成 | 迁移预测与结果 | 回归测试 |
+| 7. L3 验收 | 进行中 | 验收记录 | 决策门 3 |
 
 ## L3 验收标准
 
@@ -275,26 +275,37 @@ go run ./examples/compose-quality-gate
 |---|---|---|
 | Graph 主路径可解释 | 已确认 | 决策门 1、架构和责任边界 |
 | 官方完整示例可运行 | 已验证 | 官方 state 示例实际输出 |
-| 自定义 Graph 正常路径 | 待验证 | 分支、循环和状态测试 |
-| 三类故障可诊断 | 待验证 | 超时、业务错误、依赖不可用的错误链和节点路径 |
-| L3 扩展已实现 | 待验证 | 自定义 `GraphCompileCallback` 与兼容边界测试 |
-| 源码链路已核对 | 待验证 | Compile 到 Runnable 调度和错误返回路径 |
-| 单变量迁移已完成 | 待验证 | 修改前预测与回归结果 |
+| 自定义 Graph 正常路径 | 已验证 | `go test ./examples/compose-quality-gate`、示例运行 |
+| 三类故障可诊断 | 已验证 | 空内容、超时、依赖不可用、非法评分和超步数测试 |
+| L3 扩展已实现 | 已验证 | `TopologySnapshotter`，嵌套 Graph、稳定排序和并发编译测试 |
+| 源码链路已核对 | 已验证 | `runtime-path.md`、`source-map.md` |
+| 单变量迁移已完成 | 已验证 | `TestQualityGateInspectorMigrationKeepsGraphTopology` |
+
+## 决策门 3：L3 验收
+
+- 推荐结论：当前实现已达到 Compose L3“扩展定制”的学习验收标准。
+- 实际验证：官方 state Graph 示例、纵向项目正常路径、三类核心故障、循环保护、并发状态隔离、拓扑快照扩展、源码链路和 Inspector 单变量迁移均已运行验证。
+- 验证命令：`go test ./...`、`go test -race ./examples/compose-quality-gate`、`go vet ./...`、`go run ./examples/compose-quality-gate` 均通过；示例包额外连续运行测试 10 次通过。
+- 生产边界：该结论只代表掌握 Compose 主路径和公开扩展点，不代表真实审核依赖、持久化、容量、部署、回滚或灾备已经生产就绪。
+- 用户验收：待确认。
+- 验收日期：待确认。
 
 ## 问题债务
 
 | 问题 | 当前结论 | 影响范围 | 验证方式 | 最晚阶段 |
 |---|---|---|---|---|
-| Graph 默认触发模式下循环与 fan-in 的精确调度顺序 | 当前主项目避免多前驱 fan-in，先聚焦单分支循环 | 纵向项目拓扑 | 阶段 5 沿一次运行追踪 Pregel 调度 | 阶段 5 |
-| 编译回调在嵌套 Graph 中的元数据形态 | `GraphNodeInfo.GraphInfo` 暴露嵌套信息 | 拓扑快照扩展 | 阶段 4 单元测试和源码核对 | 阶段 4 |
-| Local State 与流式 Handler 的物化边界 | 非流式 State Handler 会合并流 | 后续流式迁移选择 | 阶段 6 单变量实验 | 阶段 6 |
+| Graph 默认触发模式下多前驱 fan-in 的精确调度顺序 | 本项目只有单分支循环；fan-in 未纳入本轮 | 并行拓扑专题 | 后续单独运行多前驱 Graph/Workflow 实验 | 后续专题 |
+| 编译回调在嵌套 Graph 中的元数据形态 | `GraphNodeInfo.GraphInfo` 暴露嵌套信息，快照测试已验证 | 拓扑快照扩展 | 阶段 4 单元测试和源码核对 | 已解决 |
+| Local State 与流式 Handler 的物化边界 | 非流式 State Handler 会合并流 | 后续流式迁移选择 | 单独执行 Stream State Handler 实验 | 后续流式专题 |
 
 ## 产物索引
 
 - [证据表](evidence.md)
 - [架构全景](architecture.md)
-- 后续运行链路、故障矩阵和源码导航将在对应阶段开始时创建。
+- [运行链路](runtime-path.md)
+- [故障矩阵](failure-matrix.md)
+- [源码导航](source-map.md)
 
 ## 下一步
 
-等待用户确认决策门 2。推荐按上述离线范围实现“内容质量门禁 + 拓扑快照器”；确认前不创建业务代码。
+等待用户确认决策门 3。当前实现和验证已完成；推荐确认 L3 Compose 学习通过，同时保留真实外部 Inspector、checkpoint、流式迁移和生产部署作为后续主题。
