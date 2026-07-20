@@ -6,6 +6,9 @@
 
 | 文件 | 符号/位置 | 作用 |
 |---|---|---|
+| `examples/compose-quality-gate/customer_service.go` | `CustomerReplyGenerator`、`simulatedCustomerReplyGenerator.Generate` | 在质量门禁前生成确定性客服回复草稿，作为后续真实 ChatModel 的替换边界 |
+| `examples/compose-quality-gate/main.go` | `main` | 接收模拟用户问题，生成草稿并调用质量门禁 |
+| `examples/compose-quality-gate/delivery.go` | `CustomerReplyDelivery`、`simulatedCustomerReplyDelivery.Deliver` | 将 approved 结果模拟发送给用户，将 manual_review 结果模拟放入人工队列 |
 | `examples/compose-quality-gate/gate.go` | `NewQualityGate` | 创建类型化 Graph、注册 Local State、编译 Runnable |
 | `examples/compose-quality-gate/topology.go` | `addGateNodes` | 将五个命名方法包装为 Lambda 并注册到 Graph |
 | `examples/compose-quality-gate/topology.go` | `addGateTopology`、`gateRouter.route` | 声明 Branch、循环边、approve/manual 到 END 的边 |

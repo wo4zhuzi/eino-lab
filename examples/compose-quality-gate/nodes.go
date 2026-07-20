@@ -58,7 +58,7 @@ func (n *gateNodes) remediate(ctx context.Context, payload gatePayload) (gatePay
 	if err := ctx.Err(); err != nil {
 		return gatePayload{}, err
 	}
-	payload.Content = strings.TrimSpace(payload.Content) + "\n[remediated]"
+	payload.Content = strings.TrimSpace(payload.Content) + "\n" + requiredRefundNotice
 	return payload, nil
 }
 

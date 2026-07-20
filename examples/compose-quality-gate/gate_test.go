@@ -48,8 +48,8 @@ func (s *sequenceInspector) Calls() int {
 
 func TestQualityGateApprovesAfterRemediation(t *testing.T) {
 	inspector := &sequenceInspector{results: []Inspection{
-		{Score: 4, Reason: "missing review marker"},
-		{Score: 8, Reason: "review marker present"},
+		{Score: 4, Reason: "missing refund timing notice"},
+		{Score: 8, Reason: "refund timing notice present"},
 	}}
 	config := DefaultGateConfig()
 	config.MaxAttempts = 2
@@ -70,12 +70,12 @@ func TestQualityGateApprovesAfterRemediation(t *testing.T) {
 	if result.Score != 8 || result.Attempts != 2 {
 		t.Fatalf("Review() score = %d, attempts = %d", result.Score, result.Attempts)
 	}
-	if !strings.Contains(result.Content, "[remediated]") {
-		t.Fatalf("Review() content = %q, want remediation marker", result.Content)
+	if !strings.Contains(result.Content, requiredRefundNotice) {
+		t.Fatalf("Review() content = %q, want refund timing notice", result.Content)
 	}
 	wantAudit := []AuditEntry{
-		{Attempt: 1, Score: 4, Reason: "missing review marker"},
-		{Attempt: 2, Score: 8, Reason: "review marker present"},
+		{Attempt: 1, Score: 4, Reason: "missing refund timing notice"},
+		{Attempt: 2, Score: 8, Reason: "refund timing notice present"},
 	}
 	if !reflect.DeepEqual(result.Audit, wantAudit) {
 		t.Fatalf("Review() audit = %#v, want %#v", result.Audit, wantAudit)

@@ -10,7 +10,7 @@
 | 目标等级 | L3：扩展定制 |
 | 当前阶段 | 阶段 7：L3 验收 |
 | 当前决策门 | 决策门 3：等待确认验收结果 |
-| 最近更新 | 2026-07-19 |
+| 最近更新 | 2026-07-20 |
 
 ## 输入解析
 
@@ -37,6 +37,26 @@
 - 目标能力：实现一个自定义 `GraphCompileCallback` 拓扑观测扩展，并验证其在嵌套 Graph 和并发编译场景下的兼容边界。
 - 完成定义：官方完整示例实际运行；自定义纵向项目覆盖正常路径和三类故障；扩展实现、回归测试、源码链路和单变量迁移均有实际证据。
 - 不在范围：Compose checkpoint/恢复、Graph 暴露为 Agent Tool、真实模型调用、RAG、多 Agent、生产部署和容量评估。
+
+## 业务场景调整
+
+当前纵向项目采用“AI 客服回复发布前审核”作为业务背景：先模拟客服生成回复草稿，再进入质量门禁；在掌握 Compose 编排后，再逐个替换为真实模型能力。
+
+```text
+用户问题
+  -> 模拟客服生成回复草稿
+  -> QualityGate 审核
+     -> 有问题：修改后重新审核
+  -> CustomerReplyDelivery
+     -> 通过：模拟发送回复
+     -> 多次失败：模拟进入人工队列
+```
+
+- 第一阶段：模拟客服生成确定性草稿，使用离线规则审核，不依赖网络或凭据。
+- 第二阶段：只将模拟客服替换为真实 ChatModel，保持审核 Graph 和 Inspector 不变。
+- 第三阶段：只将离线 Inspector 替换为真实模型或内容审核 API，保持 Graph 拓扑不变。
+- 第四阶段：只将模拟交付组件替换为真实消息通道和人工审核队列。
+- 每次迁移只改变一个外部能力，分别验证输入、错误传播、拓扑和运行结果。
 
 ## 版本基线
 
@@ -166,11 +186,11 @@ go -C "$EINO_EXAMPLES_DIR" run ./compose/graph/state
 
 ## 最小完整纵向项目
 
-- 原生场景：可审计内容质量门禁 Graph。
-- 业务目标：验证输入后调用可替换 `Inspector` 评分；低分进入补救节点并重新检查，达到阈值后通过，达到最大尝试次数后转人工复核。
+- 原生场景：AI 客服回复发布前的可审计质量门禁 Graph。
+- 业务目标：模拟客服先生成回复草稿；质量门禁调用可替换 `Inspector` 评分；低分进入补救节点并重新检查，达到阈值后允许发送，达到最大尝试次数后转人工复核。
 - 主链路：`START -> validate -> inspect -> Branch -> remediate/approve/manual -> END`，其中 `remediate -> inspect` 形成受控循环。
 - 框架身份机制：类型化 Graph、Lambda、Branch、Local State、最大步数、per-run Callback、节点错误路径和自定义编译回调。
-- 外部边界：`Inspector` 接口；默认测试使用确定性实现，不访问真实模型或网络。
+- 外部边界：模拟客服生成器、`Inspector` 和 `CustomerReplyDelivery`；默认测试使用确定性实现，不访问真实模型或网络。
 - L3 扩展：自定义拓扑快照器从 `GraphInfo` 复制 Graph 名称、节点、边和分支摘要；不保留节点实例和可变 Graph 引用。
 - 异常候选：空内容业务错误、检查超时、Inspector 不可用、循环超过最大步数。
 - 代码目录：[examples/compose-quality-gate/](../../../../examples/compose-quality-gate/)。
@@ -182,9 +202,9 @@ ReviewRequest
 -> validate
 -> inspect
 -> Branch
-   -> approve -> ReviewResult(status=approved)
+   -> approve -> ReviewResult(status=approved) -> 模拟发送给用户
    -> remediate -> inspect（有界循环）
-   -> manual -> ReviewResult(status=manual_review)
+   -> manual -> ReviewResult(status=manual_review) -> 模拟进入人工队列
 ```
 
 - `validate`：拒绝空白内容，生成运行负载。
@@ -209,8 +229,10 @@ ReviewRequest
 
 | 边界 | 默认实现 | 替代实现 | 本轮选择 |
 |---|---|---|---|
+| 回复生成 | 确定性模拟客服函数 | 真实 ChatModel | 先使用模拟实现，后续单变量替换 |
 | `Inspector` | 测试可控的 scripted inspector | 真实 ChatModel 或内容审核服务 | 默认完全离线，阶段 6 只替换这一项 |
 | 内容补救 | 确定性 Lambda | 模型改写服务 | 保持本轮变量单一，不引入第二个外部依赖 |
+| 结果交付 | 模拟 `CustomerReplyDelivery` | 消息通道和人工审核队列 | 覆盖发送与转人工两个终态，后续单变量替换 |
 | 审计存储 | Local State 随结果返回 | 数据库或事件流 | 只验证运行级状态，不冒充持久化 |
 
 ### 故障与可观测性
@@ -236,7 +258,7 @@ ReviewRequest
 | 真实 ChatModel/审核 API | 省略 | 会引入凭据、网络和非确定性，不影响 Graph 学习目标 |
 | checkpoint/恢复和持久化审计 | 省略 | 与 Local State 是不同问题，应单独学习 |
 | Stream、Agent Tool、RAG、多 Agent | 省略 | 不属于当前纵向项目的必要主链路 |
-| HTTP 服务和生产部署 | 省略 | 本轮目标是 Compose 扩展定制，不做生产就绪评估 |
+| HTTP 服务和生产部署 | 省略 | 使用模拟交付完成业务闭环，但不冒充真实网络发送和生产部署 |
 
 ### 计划验证命令
 
@@ -251,10 +273,10 @@ go run ./examples/compose-quality-gate
 
 ## 决策门 2：纵向项目范围
 
-- 推荐范围：实现离线、可审计的内容质量门禁 Graph；使用 scripted `Inspector`、确定性补救、三路 Branch、有界循环、Local State 和拓扑快照器。
-- 取舍依据：该范围完整触发 Compose 的非线性调度、状态隔离、循环保护、错误路径和公开扩展点，同时不被真实模型、持久化或部署问题干扰。
-- 用户决定：确认按离线内容质量门禁范围实现。
-- 确认日期：2026-07-19。
+- 推荐范围：模拟客服生成回复草稿，再使用离线、可审计的内容质量门禁 Graph，最后模拟发送或进入人工队列；保留 scripted `Inspector`、确定性补救、三路 Branch、有界循环、Local State 和拓扑快照器。
+- 取舍依据：先让业务输入真实存在，再学习 Compose 的非线性调度、状态隔离、循环保护、错误路径和公开扩展点；真实模型通过单变量迁移引入，避免网络和模型输出掩盖编排问题。
+- 用户决定：确认先模拟客服，掌握 Compose 后再替换为真实模型。
+- 确认日期：2026-07-20。
 
 ## 执行阶段
 
@@ -308,4 +330,4 @@ go run ./examples/compose-quality-gate
 
 ## 下一步
 
-等待用户确认决策门 3。当前实现和验证已完成；推荐确认 L3 Compose 学习通过，同时保留真实外部 Inspector、checkpoint、流式迁移和生产部署作为后续主题。
+从 `main.go` 重新沿“问题 -> 模拟客服草稿 -> `NewQualityGate` -> `Review` -> `CustomerReplyDelivery`”阅读完整闭环。真实 ChatModel、审核模型和消息通道暂不接入，后续按单变量迁移顺序替换。
