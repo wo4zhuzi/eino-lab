@@ -8,7 +8,7 @@
 | 源码来源 | `module`：`github.com/cloudwego/eino@v0.9.12`；官方示例仓库作为辅助证据 |
 | 框架版本 | Eino `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L3：扩展定制 |
-| 当前阶段 | 后续单变量迁移：接入 ChatModel 回复生成器 |
+| 当前阶段 | ChatModel 节点单变量迁移：已完成 |
 | 当前决策门 | 决策门 3：已通过，进入组件集成学习 |
 | 最近更新 | 2026-07-21 |
 
@@ -53,7 +53,7 @@
 ```
 
 - 第一阶段：模拟客服生成确定性草稿，使用离线规则审核，不依赖网络或凭据。
-- 第二阶段：只将模拟客服替换为真实 ChatModel，保持审核 Graph 和 Inspector 不变。`已实现` 默认模拟模式保持离线可运行，显式设置 `CUSTOMER_REPLY_MODE=model` 时调用 EinoExt OpenAI ChatModel。
+- 第二阶段：只将模拟客服替换为真实 ChatModel，保持审核 Graph 和 Inspector 不变。`已实现` 默认模拟模式保持离线可运行，`model` 在 Graph 外调用 EinoExt OpenAI ChatModel，`model_graph` 将同一组件注册为 Compose 节点。
 - 第三阶段：只将离线 Inspector 替换为真实模型或内容审核 API，保持 Graph 拓扑不变。
 - 第四阶段：只将模拟交付组件替换为真实消息通道和人工审核队列。
 - 每次迁移只改变一个外部能力，分别验证输入、错误传播、拓扑和运行结果。
@@ -291,6 +291,7 @@ go run ./examples/compose-quality-gate
 | 5. 源码链路 | 已完成 | `runtime-path.md`、`source-map.md` | 文件与符号引用 |
 | 6. 单变量迁移 | 已完成 | 迁移预测与结果 | 回归测试 |
 | 7. L3 验收与巩固 | 进行中 | 验收记录、苏格拉底式问答 | 决策门 3 |
+| 8. ChatModel 节点单变量迁移 | 已完成 | 回复生成 Graph、对照测试、在线冒烟 | test、race、vet、离线与在线运行 |
 
 ## L3 验收标准
 
@@ -322,16 +323,18 @@ go run ./examples/compose-quality-gate
 - 方式：每轮先给出场景、相关文件和足够回答问题的最小代码片段，再只讨论一个关键问题；先由用户解释，再根据回答追问假设、反例或源码证据，不假定用户记得示例实现，也不直接公布整章答案。
 - 当前沉淀：已新增 [核心概念笔记](core-concepts.md)，集中说明 Lambda、Edge、Branch、Local State，以及包装、注册、挂载、编译和运行的职责边界与设计原因。
 - 当前掌握：已能区分节点注册与拓扑连接、固定 Edge 与条件 Branch、同一次运行与两次 Review 的状态边界；错误与取消传播暂缓，优先巩固 Compose 自身的构建和运行原理。
-- 重新验收：已完成。后续通过 ChatModel 单变量迁移继续检验组件边界理解。
+- 重新验收：已完成；ChatModel 单变量迁移也已进一步验证组件边界理解。
 
 ## ChatModel 单变量迁移
 
-- `建议` 迁移目标：把 `simulatedCustomerReplyGenerator` 替换为基于 `model.BaseChatModel` 的实现，不修改 QualityGate 的节点、Edge、Branch 或 Local State。
-- `已验证` `NewChatModelCustomerReplyGenerator` 构造的适配器使用 System/User Message 调用 `BaseChatModel.Generate`，拒绝空问题和空模型响应，并用 `%w` 保留模型错误链。
-- `已验证` CLI 默认选择 `simulated`，只有显式设置 `CUSTOMER_REPLY_MODE=model` 才创建 EinoExt OpenAI ChatModel，避免默认测试和本地运行产生网络调用。
-- `已验证` scripted ChatModel 测试覆盖提示消息、模型错误、空响应、取消传播和环境配置；默认示例仍可离线运行。
-- `待验证` 真实模型在线调用需要用户提供有效凭据和 OpenAI 兼容服务，本轮没有把未执行的在线冒烟标记为通过。
-- `边界` 当前 ChatModel 位于审核 Graph 上游，不是通过 `AddChatModelNode` 注册的 Graph 节点；下一步将比较这两种组合方式。
+- `已验证` 保留 `CUSTOMER_REPLY_MODE=model` 作为 Graph 外 `BaseChatModel.Generate` 基线，新增 `model_graph` 作为 Graph 内 `AddChatModelNode` 路径。
+- `已验证` 两条路径共享 System/User Message 构造和回复正文解析；对照测试证明传给模型的消息和最终业务字符串完全一致。
+- `已验证` 回复生成 Graph 使用 `Graph[string, string]`，内部类型依次为 `string -> []*schema.Message -> *schema.Message -> string`，QualityGate 的节点、Edge、Branch 和 Local State 未修改。
+- `已验证` scripted ChatModel 测试覆盖正常路径、模型错误、超时、空响应和空问题；`errors.Is` 保留根因，错误文本分别定位到消息构造、模型或正文提取节点。
+- `已验证` Graph 内路径通过独立 Observer 记录回复 Graph、Lambda 和 ChatModel 生命周期；Graph 外业务适配器当前不注入 Compose 调用级 Callback。
+- `已验证` 2026-07-21 使用仓库本地、未回显的 OpenAI 兼容配置完成一次真实 `model_graph` 在线冒烟，进程退出码 0；模型生成草稿后，原 QualityGate 两次检查通过并完成模拟交付，回复阶段记录 8 条 Callback。
+- `已验证` 完整回归命令 `go test ./examples/compose-quality-gate`、`go test ./...`、`go test -race ./examples/compose-quality-gate`、`go vet ./...` 和默认离线 `go run ./examples/compose-quality-gate` 均通过。
+- `边界` 回复生成 Graph 与 QualityGate 仍是两个独立 Runnable；本轮没有把它们组合成嵌套 Graph，也没有引入流式输出。
 
 ## 问题债务
 
@@ -352,4 +355,4 @@ go run ./examples/compose-quality-gate
 
 ## 下一步
 
-运行一次真实 ChatModel 冒烟，然后比较“Graph 外直接调用 `BaseChatModel.Generate`”与“Graph 内使用 `AddChatModelNode`”的数据类型、回调范围和错误路径。
+下一阶段进入流式 ChatModel 专题：把回复生成 Graph 从 `Invoke/Generate` 单变量迁移到 `Stream`，验证流读取期错误、Callback 的 `OnEndWithStreamOutput` 和非流式 Lambda 的物化边界。

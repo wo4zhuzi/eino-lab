@@ -18,22 +18,41 @@ func TestCustomerReplyGeneratorFromEnvDefaultsToSimulated(t *testing.T) {
 }
 
 func TestCustomerReplyGeneratorFromEnvBuildsModelGenerator(t *testing.T) {
-	values := map[string]string{
-		"CUSTOMER_REPLY_MODE":    "model",
-		"CUSTOMER_REPLY_TIMEOUT": "3s",
-		"OPENAI_API_KEY":         "test-key",
-		"OPENAI_MODEL":           "test-model",
-		"OPENAI_BASE_URL":        "http://127.0.0.1:1/v1",
+	tests := []struct {
+		mode string
+		want any
+	}{
+		{mode: "model", want: (*chatModelCustomerReplyGenerator)(nil)},
+		{mode: "model_graph", want: (*chatModelGraphCustomerReplyGenerator)(nil)},
 	}
 
-	generator, err := customerReplyGeneratorFromEnv(context.Background(), func(key string) string {
-		return values[key]
-	})
-	if err != nil {
-		t.Fatalf("customerReplyGeneratorFromEnv() error = %v", err)
-	}
-	if _, ok := generator.(*chatModelCustomerReplyGenerator); !ok {
-		t.Fatalf("customerReplyGeneratorFromEnv() type = %T, want *chatModelCustomerReplyGenerator", generator)
+	for _, test := range tests {
+		t.Run(test.mode, func(t *testing.T) {
+			values := map[string]string{
+				"CUSTOMER_REPLY_MODE":    test.mode,
+				"CUSTOMER_REPLY_TIMEOUT": "3s",
+				"OPENAI_API_KEY":         "test-key",
+				"OPENAI_MODEL":           "test-model",
+				"OPENAI_BASE_URL":        "http://127.0.0.1:1/v1",
+			}
+
+			generator, err := customerReplyGeneratorFromEnv(context.Background(), func(key string) string {
+				return values[key]
+			})
+			if err != nil {
+				t.Fatalf("customerReplyGeneratorFromEnv() error = %v", err)
+			}
+			switch test.want.(type) {
+			case *chatModelCustomerReplyGenerator:
+				if _, ok := generator.(*chatModelCustomerReplyGenerator); !ok {
+					t.Fatalf("customerReplyGeneratorFromEnv() type = %T, want *chatModelCustomerReplyGenerator", generator)
+				}
+			case *chatModelGraphCustomerReplyGenerator:
+				if _, ok := generator.(*chatModelGraphCustomerReplyGenerator); !ok {
+					t.Fatalf("customerReplyGeneratorFromEnv() type = %T, want *chatModelGraphCustomerReplyGenerator", generator)
+				}
+			}
+		})
 	}
 }
 

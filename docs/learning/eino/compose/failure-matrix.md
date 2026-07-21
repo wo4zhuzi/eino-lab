@@ -19,6 +19,9 @@ GOCACHE="${TMPDIR:-/tmp}/eino-lab-race-gocache" go test -race ./examples/compose
 | 非法评分 | `Inspector` 返回 11 | 拒绝超出协议范围的结果 | `TestQualityGateRejectsInvalidInspection` 通过；`errors.Is` 成功，错误包含 `inspect` 节点路径 | 测试断言、NodeRunError 文本 | 组件契约在节点边界校验 |
 | 循环超过 Graph 步数 | Inspector 永远返回低分，业务尝试上限设为 100，Graph 上限设为 3 | 返回 `compose.ErrExceedMaxSteps` | `TestQualityGateStopsAtGraphStepLimit` 通过，`errors.Is` 成功 | 测试断言 | `WithMaxRunSteps` 是最后一道运行保护 |
 | 并发调用状态串扰 | 同一 `Runnable` 并发调用 24 次 | 每次尝试从 1 开始，审计长度独立 | `TestQualityGateLocalStateIsIsolatedAcrossConcurrentRuns` 和 `go test -race` 通过 | 每次结果的 Attempts/Audit、race 输出 | Local State 不应放入全局变量 |
+| ChatModel 不可用 | `generate_customer_reply` 返回模型错误 | 保留模型根因并追加节点路径 | `TestChatModelGraphCustomerReplyGeneratorPreservesModelErrorAndNodePath` 通过 | `errors.Is`、CallbackRecord、NodeRunError 文本 | Graph 内组件错误可同时分类和定位 |
+| ChatModel 超时 | 模型等待 `ctx.Done()` | 传播 `context.DeadlineExceeded` | `TestChatModelGraphCustomerReplyGeneratorReportsModelTimeout` 通过，Callback 记录 `deadline_exceeded` | 测试断言、CallbackRecord | 模型必须实现取消协议，Compose 保留语义 |
+| ChatModel 空响应 | `extract_customer_reply` 收到空正文 | 返回 `ErrEmptyCustomerReply` | `TestChatModelGraphCustomerReplyGeneratorRejectsEmptyResponseAtExtractor` 通过 | `errors.Is`、提取节点路径 | 业务响应契约由相邻 Lambda 校验 |
 
 ## 错误传播结论
 
@@ -36,3 +39,4 @@ strings.Contains(err.Error(), "node path: [inspect]")
 - `Inspector` 的真实网络重试、熔断和 SLA 不在本示例范围内。
 - `WithMaxRunSteps` 只保护当前运行，不提供失败恢复或持久化。
 - Callback 记录保存在进程内，生产环境仍需接入统一日志、指标或 Trace 后端。
+- 在线冒烟只验证了一次真实模型成功调用，不代表模型服务的容量、重试、限流或 SLA 已验证。

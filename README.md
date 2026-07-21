@@ -5,7 +5,7 @@ CloudWeGo Eino 学习与实践仓库，当前锁定 Eino `v0.9.12` 和 Go `1.26.
 ## 示例
 
 - [可诊断天气 Agent](examples/diagnosable-weather-agent/README.md)：ADK `ChatModelAgent + Tool + Runner + Callback` 的流式运行与故障诊断。
-- [Compose 内容质量门禁](examples/compose-quality-gate/README.md)：Graph、Branch、Local State、循环保护、拓扑快照扩展和可选 ChatModel 回复生成。
+- [Compose 内容质量门禁](examples/compose-quality-gate/README.md)：Graph、Branch、Local State、循环保护、拓扑快照扩展，以及 ChatModel 在 Graph 内外的单变量迁移对照。
 
 ## 学习文档
 

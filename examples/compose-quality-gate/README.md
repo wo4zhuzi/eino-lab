@@ -5,15 +5,15 @@
 本示例对应一个实际的 AI 客服场景：客服系统先生成回复草稿，再在发送前经过质量门禁。
 
 ```text
-用户问题 -> 模拟生成器或 ChatModel -> 回复草稿 -> 质量审核 Graph
-                                              |-> 通过并发送
-                                              |-> 修改后重新审核
-                                              `-> 多次失败转人工
+用户问题 -> 模拟生成器或 ChatModel 回复生成 Graph -> 回复草稿 -> 质量审核 Graph
+                                                        |-> 通过并发送
+                                                        |-> 修改后重新审核
+                                                        `-> 多次失败转人工
 ```
 
-默认模式仍使用确定性模拟客服、离线审核规则和模拟交付组件，不需要网络或凭据。设置 `CUSTOMER_REPLY_MODE=model` 后，只把模拟客服替换为真实 ChatModel；审核 Graph、Inspector 和交付组件保持不变，以验证组件接口支持单变量迁移。
+默认模式使用确定性模拟客服、离线审核规则和模拟交付组件，不需要网络或凭据。`CUSTOMER_REPLY_MODE=model` 在 Graph 外直接调用 ChatModel；`CUSTOMER_REPLY_MODE=model_graph` 把同一个 ChatModel 注册为 Compose 节点。两种模型模式共享提示构造和响应解析，审核 Graph、Inspector 和交付组件保持不变。
 
-当前 ChatModel 是审核 Graph 的上游组件：`ChatModel -> CustomerReplyGenerator -> ReviewRequest -> QualityGate`。它不是 Branch，也没有注册为 Graph 节点。这样设计是为了先单独掌握 Eino 模型组件；后续再把模型迁入 Compose 节点，比较直接组件调用与 `AddChatModelNode` 的差异。
+两种模式用于比较直接组件调用与 `AddChatModelNode` 的差异：Graph 外路径只返回业务错误链；Graph 内路径额外提供 Lambda/ChatModel Callback 和节点路径。两者最终都输出字符串草稿，再进入独立的 QualityGate Graph。
 
 ## 学习目标
 
@@ -25,10 +25,15 @@
 - 节点路径错误和调用级 Callback。
 - 自定义 `GraphCompileCallback` 生成稳定拓扑快照。
 - `model.BaseChatModel` 与业务接口 `CustomerReplyGenerator` 之间的适配边界。
+- `BaseChatModel.Generate` 与 `AddChatModelNode` 的数据类型、Callback 和错误路径差异。
 
 ## 运行链路
 
 ```text
+回复生成 Graph（仅 model_graph）：
+START -> build_customer_reply_messages -> generate_customer_reply -> extract_customer_reply -> END
+
+质量审核 Graph：
 START -> validate -> inspect -> Branch
                               |-> approve -> END
                               |-> remediate -> inspect
@@ -46,13 +51,14 @@ START -> validate -> inspect -> Branch
 
 1. `main.go`：程序入口，只看问题、生成器选择、草稿、Graph 构建和一次 `Review` 调用。
 2. `customer_service.go`：业务接口、模拟实现和 ChatModel 适配器。
-3. `customer_service_config.go`：根据环境变量显式选择模拟模式或模型模式。
-4. `gate.go`：公开类型、Local State、`NewQualityGate`、`Compile` 和 `Review`。
-5. `topology.go`：Lambda 节点注册、Branch 目标和 Edge 连接。
-6. `nodes.go`：validate、inspect、remediate、approve、manual 的具体业务逻辑。
-7. `delivery.go`：根据审核终态模拟发送回复或进入人工队列。
-8. `observer.go` 与 `snapshot.go`：运行期和编译期观测扩展。
-9. `*_test.go`：正常路径、故障、并发隔离和扩展边界证据。
+3. `customer_service_graph.go`：Graph 内的消息构造、ChatModel 节点和正文提取。
+4. `customer_service_config.go`：根据环境变量显式选择模拟、Graph 外模型或 Graph 内模型。
+5. `gate.go`：公开类型、Local State、`NewQualityGate`、`Compile` 和 `Review`。
+6. `topology.go`：Lambda 节点注册、Branch 目标和 Edge 连接。
+7. `nodes.go`：validate、inspect、remediate、approve、manual 的具体业务逻辑。
+8. `delivery.go`：根据审核终态模拟发送回复或进入人工队列。
+9. `observer.go` 与 `snapshot.go`：运行期和编译期观测扩展。
+10. `*_test.go`：正常路径、故障、并发隔离和扩展边界证据。
 
 这样可以先回答“程序如何运行”，再深入“每个节点做什么”。
 
@@ -67,7 +73,7 @@ START -> validate -> inspect -> Branch
 
 | 环境变量 | 必填 | 用途 |
 |---|---|---|
-| `CUSTOMER_REPLY_MODE` | 是 | 设置为 `model` 后启用真实模型；默认是 `simulated` |
+| `CUSTOMER_REPLY_MODE` | 是 | `simulated`、`model` 或 `model_graph`；默认是 `simulated` |
 | `OPENAI_API_KEY` | 模型模式必填 | 模型服务凭据 |
 | `OPENAI_MODEL` | 模型模式必填 | 模型名称 |
 | `OPENAI_BASE_URL` | 否 | OpenAI 兼容服务地址；不填时使用组件默认地址 |
@@ -92,6 +98,27 @@ export CUSTOMER_REPLY_TIMEOUT=15s
 go run ./examples/compose-quality-gate
 ```
 
+把真实模型注册为 Compose 节点：
+
+```bash
+export CUSTOMER_REPLY_MODE=model_graph
+export OPENAI_API_KEY=your-api-key
+export OPENAI_MODEL=your-model
+export OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+export CUSTOMER_REPLY_TIMEOUT=15s
+go run ./examples/compose-quality-gate
+```
+
+两种模型模式只改变回复生成器的执行位置：
+
+| 对比项 | `model` | `model_graph` |
+|---|---|---|
+| 模型调用 | Graph 外直接 `BaseChatModel.Generate` | Graph 内 `AddChatModelNode` |
+| 中间类型 | 应用直接构造和解析消息 | Lambda：`string -> []*schema.Message -> *schema.Message -> string` |
+| 调用级 Callback | 当前业务适配器不注入 Compose Callback | 覆盖回复 Graph、Lambda 和 ChatModel 节点 |
+| 错误文本 | 应用上下文包装 | Compose `NodeRunError` 和节点路径 |
+| 根因判断 | `%w` 支持 `errors.Is` | `NodeRunError.Unwrap` 支持 `errors.Is` |
+
 模型输出具有非确定性。在线运行只用于冒烟验证；默认回归测试使用 scripted ChatModel，不访问网络。
 
 预期输出的关键部分：
@@ -103,6 +130,8 @@ graph=compose_quality_gate nodes=5 edges=5 branches=1
 status=approved score=8 attempts=2
 attempt=1 score=4 reason="refund timing notice is missing"
 attempt=2 score=8 reason="refund timing notice is present"
+reply_callback_records=0
+gate_callback_records=12
 delivery=sent customer_id=customer-001 reply="您好，关于“我的订单什么时候能退款？”，我们已收到您的问题，正在为您核实处理。\n退款到账时间以支付平台实际处理结果为准。"
 ```
 
@@ -122,4 +151,5 @@ go vet ./...
 - 确定性补救只追加退款到账时间说明，用于验证循环控制流，不代表通用内容改写策略。
 - `GraphCompileCallback.OnFinish` 没有错误返回值，拓扑快照器只能观测，不能否决编译。
 - 真实 ChatModel 目前只负责生成初始回复，离线 Inspector 和补救节点仍是确定性实现。
-- ChatModel 尚未注册为 Compose 节点；本阶段也不覆盖流式模型输出、RAG、Agent Tool、HTTP 服务或生产部署。
+- ChatModel 回复生成 Graph 与 QualityGate 是两个独立 Runnable，尚未组合为嵌套 Graph。
+- 本阶段不覆盖流式模型输出、RAG、Agent Tool、HTTP 服务或生产部署。

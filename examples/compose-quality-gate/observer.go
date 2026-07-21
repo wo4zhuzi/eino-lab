@@ -70,6 +70,10 @@ func ErrorKind(err error) string {
 		return "canceled"
 	case errors.Is(err, ErrEmptyContent):
 		return "empty_content"
+	case errors.Is(err, ErrEmptyCustomerQuestion):
+		return "empty_customer_question"
+	case errors.Is(err, ErrEmptyCustomerReply):
+		return "empty_customer_reply"
 	case errors.Is(err, ErrInspectorUnavailable):
 		return "inspector_unavailable"
 	case errors.Is(err, ErrInvalidInspection):

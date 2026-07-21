@@ -25,7 +25,8 @@ func main() {
 	ctx := context.Background()
 	customerID := "customer-001"
 	question := "我的订单什么时候能退款？"
-	generator, err := customerReplyGeneratorFromEnv(ctx, os.Getenv)
+	replyObserver := NewObserver()
+	generator, err := customerReplyGeneratorFromEnv(ctx, os.Getenv, replyObserver.Handler())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configure customer reply generator: %v\n", err)
 		os.Exit(1)
@@ -45,11 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	observer := NewObserver()
+	gateObserver := NewObserver()
 	result, err := gate.Review(
 		ctx,
 		ReviewRequest{Content: draft},
-		compose.WithCallbacks(observer.Handler()),
+		compose.WithCallbacks(gateObserver.Handler()),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "review content: %v\n", err)
@@ -68,7 +69,8 @@ func main() {
 	for _, entry := range result.Audit {
 		fmt.Printf("attempt=%d score=%d reason=%q\n", entry.Attempt, entry.Score, entry.Reason)
 	}
-	fmt.Printf("callback_records=%d\n", len(observer.Records()))
+	fmt.Printf("reply_callback_records=%d\n", len(replyObserver.Records()))
+	fmt.Printf("gate_callback_records=%d\n", len(gateObserver.Records()))
 
 	var delivery CustomerReplyDelivery = simulatedCustomerReplyDelivery{output: os.Stdout}
 	if err := delivery.Deliver(ctx, customerID, result); err != nil {

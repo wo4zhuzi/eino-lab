@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/callbacks"
 )
 
 const defaultCustomerReplyTimeout = 15 * time.Second
@@ -14,12 +15,13 @@ const defaultCustomerReplyTimeout = 15 * time.Second
 func customerReplyGeneratorFromEnv(
 	ctx context.Context,
 	getenv func(string) string,
+	handlers ...callbacks.Handler,
 ) (CustomerReplyGenerator, error) {
 	mode := strings.ToLower(strings.TrimSpace(getenv("CUSTOMER_REPLY_MODE")))
 	switch mode {
 	case "", "simulated":
 		return simulatedCustomerReplyGenerator{}, nil
-	case "model":
+	case "model", "model_graph":
 		apiKey := strings.TrimSpace(getenv("OPENAI_API_KEY"))
 		modelName := strings.TrimSpace(getenv("OPENAI_MODEL"))
 		if apiKey == "" || modelName == "" {
@@ -41,6 +43,9 @@ func customerReplyGeneratorFromEnv(
 			return nil, fmt.Errorf("create OpenAI chat model: %w", err)
 		}
 
+		if mode == "model_graph" {
+			return NewChatModelGraphCustomerReplyGenerator(ctx, chatModel, handlers...)
+		}
 		return NewChatModelCustomerReplyGenerator(chatModel)
 	default:
 		return nil, fmt.Errorf("unsupported CUSTOMER_REPLY_MODE %q", mode)

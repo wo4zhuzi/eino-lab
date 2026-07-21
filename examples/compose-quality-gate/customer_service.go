@@ -56,21 +56,37 @@ func NewChatModelCustomerReplyGenerator(chatModel model.BaseChatModel) (Customer
 }
 
 func (g *chatModelCustomerReplyGenerator) Generate(ctx context.Context, question string) (string, error) {
-	if err := ctx.Err(); err != nil {
+	messages, err := customerReplyMessages(ctx, question)
+	if err != nil {
 		return "", err
+	}
+
+	response, err := g.chatModel.Generate(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("generate customer reply with chat model: %w", err)
+	}
+	return customerReplyContent(ctx, response)
+}
+
+func customerReplyMessages(ctx context.Context, question string) ([]*schema.Message, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	question = strings.TrimSpace(question)
 	if question == "" {
-		return "", ErrEmptyCustomerQuestion
+		return nil, ErrEmptyCustomerQuestion
 	}
 
-	response, err := g.chatModel.Generate(ctx, []*schema.Message{
+	return []*schema.Message{
 		schema.SystemMessage(customerReplySystemPrompt),
 		schema.UserMessage("客户问题：\n" + question),
-	})
-	if err != nil {
-		return "", fmt.Errorf("generate customer reply with chat model: %w", err)
+	}, nil
+}
+
+func customerReplyContent(ctx context.Context, response *schema.Message) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 	if response == nil || strings.TrimSpace(response.Content) == "" {
 		return "", ErrEmptyCustomerReply
