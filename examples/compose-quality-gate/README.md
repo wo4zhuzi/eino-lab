@@ -36,6 +36,9 @@ START -> validate -> inspect -> Branch
 
 ## 阅读顺序
 
+如果对“包装、注册、添加和执行”的区别还不熟悉，先阅读
+[Compose 核心概念](../../docs/learning/eino/compose/core-concepts.md)。
+
 建议按职责从外到内阅读，不要从单个文件第一行一路读到底：
 
 1. `main.go`：程序入口，只看问题、模拟客服草稿、配置、构建和一次 `Review` 调用。

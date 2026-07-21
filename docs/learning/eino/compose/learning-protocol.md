@@ -319,6 +319,8 @@ go run ./examples/compose-quality-gate
 - 目标：不依赖背诵文档，能够从输入和配置预测 Graph 的节点路径、状态变化、错误链和扩展行为。
 - 顺序：控制流与数据流 -> Local State 与并发边界 -> 错误与取消传播 -> Callback 与拓扑扩展 -> 单变量迁移。
 - 方式：每轮先给出场景、相关文件和足够回答问题的最小代码片段，再只讨论一个关键问题；先由用户解释，再根据回答追问假设、反例或源码证据，不假定用户记得示例实现，也不直接公布整章答案。
+- 当前沉淀：已新增 [核心概念笔记](core-concepts.md)，集中说明 Lambda、Edge、Branch、Local State，以及包装、注册、挂载、编译和运行的职责边界与设计原因。
+- 当前掌握：已能区分节点注册与拓扑连接、固定 Edge 与条件 Branch、同一次运行与两次 Review 的状态边界；错误与取消传播暂缓，优先巩固 Compose 自身的构建和运行原理。
 - 重新验收：用户能够独立解释正常路径与异常路径，并能在修改一个变量前正确预测影响范围后，再次进入决策门 3。
 
 ## 问题债务
@@ -333,10 +335,11 @@ go run ./examples/compose-quality-gate
 
 - [证据表](evidence.md)
 - [架构全景](architecture.md)
+- [核心概念：Lambda、Edge、Branch 与 Local State](core-concepts.md)
 - [运行链路](runtime-path.md)
 - [故障矩阵](failure-matrix.md)
 - [源码导航](source-map.md)
 
 ## 下一步
 
-开始第一轮苏格拉底式诊断：沿第一次低分检查追踪 `gatePayload`、`gateState` 和 Branch 的决策依据。
+以 [核心概念笔记](core-concepts.md) 为基线，继续沿 `Compile -> Runnable.Invoke -> Graph 调度` 追踪 Compose 如何把构建期声明转换为运行期执行计划。
