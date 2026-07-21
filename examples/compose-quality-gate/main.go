@@ -25,7 +25,11 @@ func main() {
 	ctx := context.Background()
 	customerID := "customer-001"
 	question := "我的订单什么时候能退款？"
-	var generator CustomerReplyGenerator = simulatedCustomerReplyGenerator{}
+	generator, err := customerReplyGeneratorFromEnv(ctx, os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "configure customer reply generator: %v\n", err)
+		os.Exit(1)
+	}
 	draft, err := generator.Generate(ctx, question)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "generate customer reply: %v\n", err)

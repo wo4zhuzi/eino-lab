@@ -8,8 +8,8 @@
 | 源码来源 | `module`：`github.com/cloudwego/eino@v0.9.12`；官方示例仓库作为辅助证据 |
 | 框架版本 | Eino `v0.9.12`，commit `13e1a25c7238293a1e558391a65525a464acb324` |
 | 目标等级 | L3：扩展定制 |
-| 当前阶段 | 阶段 7：L3 苏格拉底式巩固 |
-| 当前决策门 | 决策门 3：未通过，待巩固后重新验收 |
+| 当前阶段 | 后续单变量迁移：接入 ChatModel 回复生成器 |
+| 当前决策门 | 决策门 3：已通过，进入组件集成学习 |
 | 最近更新 | 2026-07-21 |
 
 ## 输入解析
@@ -36,7 +36,7 @@
 - 目标能力：能构建包含类型化节点、显式分支、受控循环、每次运行本地状态和节点错误定位的 Graph。
 - 目标能力：实现一个自定义 `GraphCompileCallback` 拓扑观测扩展，并验证其在嵌套 Graph 和并发编译场景下的兼容边界。
 - 完成定义：官方完整示例实际运行；自定义纵向项目覆盖正常路径和三类故障；扩展实现、回归测试、源码链路和单变量迁移均有实际证据。
-- 不在范围：Compose checkpoint/恢复、Graph 暴露为 Agent Tool、真实模型调用、RAG、多 Agent、生产部署和容量评估。
+- 不在范围：Compose checkpoint/恢复、Graph 暴露为 Agent Tool、RAG、多 Agent、生产部署和容量评估；真实模型调用作为 L3 通过后的单变量迁移继续学习。
 
 ## 业务场景调整
 
@@ -53,7 +53,7 @@
 ```
 
 - 第一阶段：模拟客服生成确定性草稿，使用离线规则审核，不依赖网络或凭据。
-- 第二阶段：只将模拟客服替换为真实 ChatModel，保持审核 Graph 和 Inspector 不变。
+- 第二阶段：只将模拟客服替换为真实 ChatModel，保持审核 Graph 和 Inspector 不变。`已实现` 默认模拟模式保持离线可运行，显式设置 `CUSTOMER_REPLY_MODE=model` 时调用 EinoExt OpenAI ChatModel。
 - 第三阶段：只将离线 Inspector 替换为真实模型或内容审核 API，保持 Graph 拓扑不变。
 - 第四阶段：只将模拟交付组件替换为真实消息通道和人工审核队列。
 - 每次迁移只改变一个外部能力，分别验证输入、错误传播、拓扑和运行结果。
@@ -255,7 +255,8 @@ ReviewRequest
 | Graph、Branch、循环、Local State | 保留 | 直接定义本轮 Compose 学习价值 |
 | 最大运行步数和错误链 | 保留 | 覆盖失控保护和诊断能力 |
 | 编译拓扑快照扩展 | 保留 | 满足 L3 真实公开扩展验收 |
-| 真实 ChatModel/审核 API | 省略 | 会引入凭据、网络和非确定性，不影响 Graph 学习目标 |
+| 真实 ChatModel | L3 后续迁移 | 只替换回复生成器；默认测试继续使用 scripted ChatModel，不访问网络 |
+| 真实审核 API | 省略 | 保持 Graph 内 Inspector 确定，避免一次改变两个外部能力 |
 | checkpoint/恢复和持久化审计 | 省略 | 与 Local State 是不同问题，应单独学习 |
 | Stream、Agent Tool、RAG、多 Agent | 省略 | 不属于当前纵向项目的必要主链路 |
 | HTTP 服务和生产部署 | 省略 | 使用模拟交付完成业务闭环，但不冒充真实网络发送和生产部署 |
@@ -311,7 +312,7 @@ go run ./examples/compose-quality-gate
 - 验证命令：`go test ./...`、`go test -race ./examples/compose-quality-gate`、`go vet ./...`、`go run ./examples/compose-quality-gate` 均通过；示例包额外连续运行测试 10 次通过。
 - 本次复核：`已验证` 2026-07-21 重新执行上述全部命令，退出码均为 0；示例输出为 `status=approved score=8 attempts=2`，拓扑摘要为 5 个节点、5 条边、1 个分支。
 - 生产边界：该结论只代表掌握 Compose 主路径和公开扩展点，不代表真实审核依赖、持久化、容量、部署、回滚或灾备已经生产就绪。
-- 用户验收：不通过；实现和验证证据充分，但用户尚未完全掌握本章，需要通过苏格拉底式提问巩固后重新验收。
+- 用户验收：通过；用户确认已基本理解 Compose 流程，并授权进入真实 ChatModel 接入阶段。
 - 验收日期：2026-07-21。
 
 ## 苏格拉底式巩固
@@ -321,7 +322,16 @@ go run ./examples/compose-quality-gate
 - 方式：每轮先给出场景、相关文件和足够回答问题的最小代码片段，再只讨论一个关键问题；先由用户解释，再根据回答追问假设、反例或源码证据，不假定用户记得示例实现，也不直接公布整章答案。
 - 当前沉淀：已新增 [核心概念笔记](core-concepts.md)，集中说明 Lambda、Edge、Branch、Local State，以及包装、注册、挂载、编译和运行的职责边界与设计原因。
 - 当前掌握：已能区分节点注册与拓扑连接、固定 Edge 与条件 Branch、同一次运行与两次 Review 的状态边界；错误与取消传播暂缓，优先巩固 Compose 自身的构建和运行原理。
-- 重新验收：用户能够独立解释正常路径与异常路径，并能在修改一个变量前正确预测影响范围后，再次进入决策门 3。
+- 重新验收：已完成。后续通过 ChatModel 单变量迁移继续检验组件边界理解。
+
+## ChatModel 单变量迁移
+
+- `建议` 迁移目标：把 `simulatedCustomerReplyGenerator` 替换为基于 `model.BaseChatModel` 的实现，不修改 QualityGate 的节点、Edge、Branch 或 Local State。
+- `已验证` `NewChatModelCustomerReplyGenerator` 构造的适配器使用 System/User Message 调用 `BaseChatModel.Generate`，拒绝空问题和空模型响应，并用 `%w` 保留模型错误链。
+- `已验证` CLI 默认选择 `simulated`，只有显式设置 `CUSTOMER_REPLY_MODE=model` 才创建 EinoExt OpenAI ChatModel，避免默认测试和本地运行产生网络调用。
+- `已验证` scripted ChatModel 测试覆盖提示消息、模型错误、空响应、取消传播和环境配置；默认示例仍可离线运行。
+- `待验证` 真实模型在线调用需要用户提供有效凭据和 OpenAI 兼容服务，本轮没有把未执行的在线冒烟标记为通过。
+- `边界` 当前 ChatModel 位于审核 Graph 上游，不是通过 `AddChatModelNode` 注册的 Graph 节点；下一步将比较这两种组合方式。
 
 ## 问题债务
 
@@ -342,4 +352,4 @@ go run ./examples/compose-quality-gate
 
 ## 下一步
 
-以 [核心概念笔记](core-concepts.md) 为基线，继续沿 `Compile -> Runnable.Invoke -> Graph 调度` 追踪 Compose 如何把构建期声明转换为运行期执行计划。
+运行一次真实 ChatModel 冒烟，然后比较“Graph 外直接调用 `BaseChatModel.Generate`”与“Graph 内使用 `AddChatModelNode`”的数据类型、回调范围和错误路径。
