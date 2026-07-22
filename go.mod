@@ -4,6 +4,8 @@ go 1.26.0
 
 require (
 	github.com/cloudwego/eino v0.9.12
+	github.com/cloudwego/eino-ext/components/document/loader/file v0.0.0-20250225083118-fd27d80f189c
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20250225083118-fd27d80f189c
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 )
 
