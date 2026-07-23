@@ -27,7 +27,7 @@
 
 使用本机端口 `15432`，避免与已经存在的 PostgreSQL `5432` 冲突。端口只绑定到 `127.0.0.1`，不向局域网暴露。
 
-2026-07-23 本机检查：Docker CLI `29.5.2` 和 Docker Compose `v5.1.3` 已安装，但 Docker Engine 尚未启动，`docker info` 无法连接 `/Users/david/.docker/run/docker.sock`。执行安装前需要先启动 Docker Desktop。
+2026-07-23 本机检查：Docker CLI `29.5.2` 和 Docker Compose `v5.1.3` 已安装，但 Docker Engine 尚未启动，`docker info` 无法连接用户目录下的 Docker socket。执行安装前需要先启动 Docker Desktop。
 
 ## 1. 检查 Docker
 

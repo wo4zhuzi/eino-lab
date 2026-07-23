@@ -61,5 +61,5 @@
 | R-31 | 自定义索引 Graph 能把一个 Markdown 文件加载、按标题切分、补齐来源/标题/Chunk ID 并写入 Indexer | 已验证 | `go run ./examples/rag-minimal` 输出 `documents=1 chunks=5`；`TestAppIndexesAndAnswersWithEvidence`、`TestIndexingTheSameFileKeepsStableChunkIDs` | 高 | 阶段 5 追踪节点与源码入口 |
 | R-32 | 查询 Graph 能按分数召回 Document，通过 Branch 控制生成，并返回真实召回记录 | 已验证 | CLI 首条召回标题为“RAG 主路径”、分数 `0.4777`、ChatModel 调用 1 次；正常路径测试通过 | 高 | 阶段 5 追踪 Local State 与错误传播 |
 | R-33 | 空问题在 Retriever 前失败；无证据跳过 ChatModel；Indexer/Retriever 不可用保留错误链；Embedding 超时保留 DeadlineExceeded | 已验证 | `go test -v ./examples/rag-minimal -count=1` 对应四类测试全部通过；详见 `failure-matrix.md` | 高 | 无 |
-| R-34 | 内存 Store 遵守 TopK、ScoreThreshold、向量数量和维度契约，并支持并发查询 | 已验证 | Store 契约测试通过；`go test -race ./examples/rag-minimal -count=1` 通过 | 高 | 阶段 6 用 Redis Store 执行单变量迁移 |
+| R-34 | 内存 Store 遵守 TopK、ScoreThreshold、向量数量和维度契约，并支持并发查询 | 已验证 | Store 契约测试通过；`go test -race ./examples/rag-minimal -count=1` 通过 | 高 | 阶段 6 用 PostgreSQL + pgvector Store 执行单变量迁移 |
 | R-35 | Hashing Embedder 的实际召回仅能证明确定性局部特征匹配，不能证明生产语义质量 | 建议 | 实现是字符 1-3 gram feature hashing，无训练语义模型 | 高 | 真实产品需要独立 Embedding 选型与评测集 |

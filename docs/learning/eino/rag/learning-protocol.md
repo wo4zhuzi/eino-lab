@@ -303,6 +303,7 @@ go run ./examples/rag-minimal "RAG 的索引写路径和查询读路径为什么
 
 ## 产物索引
 
+- [RAG 核心概念：从文档到可追溯回答](core-concepts.md)
 - [证据表](evidence.md)
 - [架构图与责任边界](architecture.md)
 - [故障矩阵](failure-matrix.md)

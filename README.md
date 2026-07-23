@@ -13,6 +13,7 @@ CloudWeGo Eino 学习与实践仓库，当前锁定 Eino `v0.9.12` 和 Go `1.26.
 - [Eino 学习协议](docs/learning/eino/learning-protocol.md)
 - [Eino Compose L3 学习协议](docs/learning/eino/compose/learning-protocol.md)
 - [Eino RAG L2 学习协议](docs/learning/eino/rag/learning-protocol.md)
+- [RAG 核心概念：从文档到可追溯回答](docs/learning/eino/rag/core-concepts.md)
 - [Compose 核心概念：Lambda、Edge、Branch 与 Local State](docs/learning/eino/compose/core-concepts.md)
 - [Compose 运行链路](docs/learning/eino/compose/runtime-path.md)
 - [Compose 故障矩阵](docs/learning/eino/compose/failure-matrix.md)
