@@ -10,7 +10,7 @@
 | 目标等级 | L2：运行与诊断 |
 | 当前阶段 | 阶段 4：运行闭环已完成；下一步阶段 5 |
 | 当前决策门 | 无 |
-| 最近更新 | 2026-07-22 |
+| 最近更新 | 2026-07-23 |
 
 ## 输入解析
 
@@ -22,6 +22,13 @@
 | `target_level` | L2 | 能运行并区分索引、检索和生成故障，不以开发知识库平台为目标 |
 | `mode` | `execute` | 用户说“继续”，但仍按决策门逐阶段推进 |
 | `output` | `docs/learning/eino/rag/` | 与已完成的 Eino L2 和 Compose L3 产物分离 |
+
+### 2026-07-23 持久化目标调整
+
+- `建议` 当前内存 Store 只满足学习运行闭环，不满足用户定义的“可用最小闭环”；可用版本必须覆盖持久化、重启复用、增量更新、删除和原文追溯。
+- `用户决定` 阶段 6 的 Store 单变量迁移候选由 Redis Stack 调整为 PostgreSQL 16 + pgvector，使用同一个离线 Embedder 先隔离验证存储变化。
+- `建议` PostgreSQL 同时保存 Document、Version、Chunk 和向量，避免第一版引入关系数据库与独立向量数据库之间的双写一致性。
+- `待验证` 当前只准备 [Docker 安装步骤](postgresql-pgvector-setup.md)，尚未启动容器、创建业务表或修改 Go Store，不能把安装文档视为迁移完成。
 
 ## 目标变更影响
 
@@ -208,7 +215,7 @@ Question
 | Loader | EinoExt File Loader | URL、S3、PDF Loader | 只读取仓库内 Markdown |
 | Splitter | EinoExt Markdown Splitter | Recursive/Semantic Splitter | 先保留标题元数据，不比较多种算法 |
 | Embedding | 本地字符 n-gram Hashing Embedder | Ark/OpenAI/Ollama Embedder | 默认离线；明确不代表生产语义质量 |
-| Store | 进程内 MemoryVectorStore | Redis Indexer/Retriever | 先观察向量与分数，不引入数据库生命周期 |
+| Store | 进程内 MemoryVectorStore | PostgreSQL + pgvector Store | 先观察向量与分数；阶段 6 单独验证持久化迁移 |
 | ChatModel | 确定性 Extractive ChatModel | 已有 OpenAI 兼容 ChatModel | 默认测试稳定；在线生成只做显式冒烟 |
 
 ### 故障与可观测性
@@ -271,6 +278,7 @@ go run ./examples/rag-minimal "RAG 的索引写路径和查询读路径为什么
 - 单变量迁移候选：后续只把 MemoryVectorStore 替换为 Redis Indexer/Retriever，继续使用同一个离线 Embedder，以验证存储边界而不同时更换模型。
 - 用户决定：确认采用推荐的离线最小闭环；Redis 保留到单变量迁移阶段。
 - 确认日期：2026-07-22。
+- 后续变更：2026-07-23 用户将阶段 6 的迁移目标调整为 PostgreSQL 16 + pgvector；原 Redis 选择保留为历史决策，不再作为当前迁移目标。
 
 ## 执行阶段
 
@@ -291,14 +299,15 @@ go run ./examples/rag-minimal "RAG 的索引写路径和查询读路径为什么
 |---|---|---|---|---|
 | 官方完整示例是否能在当前环境原样运行 | 已确认不能：官方初始化未配置认证；适配认证后又确认当前 Redis 缺少 RediSearch；Ark 三项配置也未设置 | 官方基线运行证据 | 分开保留原样运行与临时适配实验记录；不伪装完成 | L2 验收 |
 | Hashing Embedder 的召回能否代表真实语义质量 | 不能；它只验证接口、排序与错误边界 | 生产选型与召回质量 | 阶段 6 单变量迁移后仍需独立评测真实 Embedding | L2 验收 |
-| 当前普通 Redis 是否能作为迁移目标 | 不能；缺少 `FT.INFO` 等 RediSearch 命令 | 阶段 6 Store 迁移 | 使用独立 Redis Stack 实例，避免影响现有 Redis | 阶段 6 |
+| PostgreSQL + pgvector 是否已满足迁移前置条件 | 尚未验证；安装文档已准备，容器和扩展状态等待用户实测 | 阶段 6 Store 迁移 | 按安装文档验证健康状态、`vector` 扩展和重启持久化 | 阶段 6 |
 
 ## 产物索引
 
 - [证据表](evidence.md)
 - [架构图与责任边界](architecture.md)
 - [故障矩阵](failure-matrix.md)
+- [PostgreSQL + pgvector 本地安装](postgresql-pgvector-setup.md)
 
 ## 下一步
 
-进入阶段 5，从 CLI 的一次真实查询追踪 `App.Ask -> Graph -> Retriever -> Branch -> ChatModel -> QueryResult`，生成运行链路与源码导航。
+先由用户按 [PostgreSQL + pgvector 本地安装](postgresql-pgvector-setup.md) 完成容器、扩展和持久化验证；验证通过后，在阶段 6 实现前记录 Store 单变量迁移预测。阶段 5 源码链路仍未开始，不因依赖准备而标记完成。
