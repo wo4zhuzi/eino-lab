@@ -4,10 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
+	"github.com/cloudwego/eino-ext/devops"
 	"github.com/cloudwego/eino/compose"
 )
+
+const einoDevEnv = "EINO_DEV"
 
 type ruleInspector struct{}
 
@@ -23,6 +28,14 @@ func (ruleInspector) Inspect(ctx context.Context, content string) (Inspection, e
 
 func main() {
 	ctx := context.Background()
+	einoDevEnabled := os.Getenv(einoDevEnv) == "true"
+	if einoDevEnabled {
+		if err := devops.Init(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "init eino devops: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	customerID := "customer-001"
 	question := "我的订单什么时候能退款？"
 	replyObserver := NewObserver()
@@ -77,4 +90,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "deliver customer reply: %v\n", err)
 		os.Exit(1)
 	}
+
+	if einoDevEnabled {
+		waitForEinoDev(ctx)
+	}
+}
+
+func waitForEinoDev(parent context.Context) {
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	fmt.Println("eino_dev=ready address=127.0.0.1:52538")
+	fmt.Println("按 Ctrl+C 停止 Eino Dev 模式")
+	<-ctx.Done()
 }

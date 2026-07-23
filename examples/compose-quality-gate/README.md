@@ -26,6 +26,7 @@
 - 自定义 `GraphCompileCallback` 生成稳定拓扑快照。
 - `model.BaseChatModel` 与业务接口 `CustomerReplyGenerator` 之间的适配边界。
 - `BaseChatModel.Generate` 与 `AddChatModelNode` 的数据类型、Callback 和错误路径差异。
+- 使用 Eino Dev 查看和调试 Code First Graph。
 
 ## 运行链路
 
@@ -67,6 +68,7 @@ START -> validate -> inspect -> Branch
 - Go `1.26.3`，以根 `go.mod` 的 `go 1.26.0` 为最低项目约束。
 - Eino `v0.9.12`。
 - EinoExt OpenAI `v0.1.13`。
+- EinoExt DevOps `v0.1.9`（仅 `EINO_DEV=true` 时启动服务）。
 - 默认模拟模式不需要 API Key 或其他外部服务。
 
 模型模式需要兼容 OpenAI Chat Completions 的服务：
@@ -78,6 +80,7 @@ START -> validate -> inspect -> Branch
 | `OPENAI_MODEL` | 模型模式必填 | 模型名称 |
 | `OPENAI_BASE_URL` | 否 | OpenAI 兼容服务地址；不填时使用组件默认地址 |
 | `CUSTOMER_REPLY_TIMEOUT` | 否 | 单次模型 HTTP 请求超时，默认 `15s` |
+| `EINO_DEV` | 否 | 设为 `true` 时启动 `127.0.0.1:52538` 并等待插件连接 |
 
 ## 运行
 
@@ -86,6 +89,16 @@ START -> validate -> inspect -> Branch
 ```bash
 go run ./examples/compose-quality-gate
 ```
+
+使用 GoLand Eino Dev 查看默认质量审核 Graph：
+
+```bash
+EINO_DEV=true go run ./examples/compose-quality-gate
+```
+
+保持进程运行，在 Eino Dev 中连接 `127.0.0.1:52538` 并选择
+`compose_quality_gate`。完整原理、Test Run 输入和生产实践见
+[Eino Dev 查看 Code First Workflow](../../docs/learning/eino/compose/eino-dev-code-first.md)。
 
 使用真实模型生成回复草稿：
 
@@ -153,3 +166,4 @@ go vet ./...
 - 真实 ChatModel 目前只负责生成初始回复，离线 Inspector 和补救节点仍是确定性实现。
 - ChatModel 回复生成 Graph 与 QualityGate 是两个独立 Runnable，尚未组合为嵌套 Graph。
 - 本阶段不覆盖流式模型输出、RAG、Agent Tool、HTTP 服务或生产部署。
+- Eino Dev HTTP 服务仅用于本地开发；当前示例通过运行时环境变量开启，生产项目应使用独立开发入口或 build tag 隔离。
