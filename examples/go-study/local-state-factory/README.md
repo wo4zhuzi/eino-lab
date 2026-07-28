@@ -4,10 +4,19 @@
 
 本示例仅使用 Go 标准库，对比以下两种状态传递方式：
 
-1. 传入同一个 `*queryState` 对象，多次运行会相互覆盖。
-2. 传入 `stateFactory` 函数，每次运行创建独立的 `*queryState`。
+1. 传入同一个 `*queryState` 对象，代表跨运行共享状态，多次运行会相互覆盖。它不代表 Eino Local State。
+2. 传入 `stateFactory` 函数，每次运行创建独立的 `*queryState`，对应 Eino `WithGenLocalState` 管理 Local State 的核心行为。
 
 它用于解释 Eino `WithGenLocalState` 为什么接收状态生成函数，不涉及任何 Eino API。
+
+## 与 Eino Local State 的对应关系
+
+| 原生 Go 示例 | 状态生命周期 | 对应的 Eino 概念 |
+|---|---|---|
+| `runWithSharedState(shared, question)` | 同一个状态对象被多次运行共享 | 反例：不是 Local State，存在覆盖和并发串扰风险 |
+| `runWithStateFactory(ctx, newQueryState, question)` | 工厂为每次运行创建独立状态 | `WithGenLocalState`：每次 Graph 运行生成自己的 Local State |
+
+这里演示的是生命周期对应关系，不是对 Eino 内部实现的复制。
 
 ## 前置条件
 
@@ -25,11 +34,11 @@ go run ./examples/go-study/local-state-factory
 预期输出：
 
 ```text
-传入同一个状态对象：
+共享状态对象（不是 Local State）：
   是否同一个对象：true
   第一次运行现在保存的问题："什么是 Embedding？"
   第二次运行保存的问题："什么是 Embedding？"
-传入状态工厂函数：
+状态工厂函数（对应 Local State）：
   是否同一个对象：false
   第一次运行保存的问题："什么是 RAG？"
   第二次运行保存的问题："什么是 Embedding？"

@@ -19,7 +19,8 @@ type queryState struct {
 // 调用方就能决定何时创建状态，并保证每次运行都拿到独立对象。
 type stateFactory func(context.Context) *queryState
 
-// runWithSharedState 接收一个已经创建好的状态对象。
+// runWithSharedState 代表“跨运行共享状态”，不代表 Eino Local State。
+// 它接收一个已经创建好的状态对象。
 //
 // 如果调用者多次传入同一个指针，每次运行修改的就是同一块数据。
 // 后一次写入会覆盖前一次写入，这正是共享运行状态的问题。
@@ -28,8 +29,11 @@ func runWithSharedState(state *queryState, question string) *queryState {
 	return state
 }
 
-// runWithStateFactory 接收的是创建状态的函数，而不是状态对象。
-// 每次调用都先执行 factory(ctx)，因此每次运行拥有独立的 queryState。
+// runWithStateFactory 代表 Eino WithGenLocalState 的核心行为：
+// 每次 Graph 运行时，通过工厂函数生成该次运行专属的 Local State。
+//
+// 它接收的是创建状态的函数，而不是状态对象。每次调用都先执行
+// factory(ctx)，因此每次运行拥有独立的 queryState。
 func runWithStateFactory(ctx context.Context, factory stateFactory, question string) *queryState {
 	// 这里有括号，表示现在调用 factory，并取得它返回的新状态。
 	state := factory(ctx)
@@ -59,14 +63,14 @@ func main() {
 	factoryFirst := runWithStateFactory(context.Background(), newQueryState, "什么是 RAG？")
 	factorySecond := runWithStateFactory(context.Background(), newQueryState, "什么是 Embedding？")
 
-	fmt.Println("传入同一个状态对象：")
+	fmt.Println("共享状态对象（不是 Local State）：")
 	// 指针可以直接比较。true 说明两个变量指向同一个 queryState。
 	fmt.Printf("  是否同一个对象：%t\n", sharedFirst == sharedSecond)
 	// sharedFirst 和 sharedSecond 指向同一对象，所以它们都读到最后写入的问题。
 	fmt.Printf("  第一次运行现在保存的问题：%q\n", sharedFirst.question)
 	fmt.Printf("  第二次运行保存的问题：%q\n", sharedSecond.question)
 
-	fmt.Println("传入状态工厂函数：")
+	fmt.Println("状态工厂函数（对应 Local State）：")
 	// false 说明状态工厂为两次运行创建了两个不同对象。
 	fmt.Printf("  是否同一个对象：%t\n", factoryFirst == factorySecond)
 	fmt.Printf("  第一次运行保存的问题：%q\n", factoryFirst.question)

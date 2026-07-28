@@ -8,6 +8,7 @@ import (
 )
 
 func TestSharedStateIsOverwritten(t *testing.T) {
+	// 该场景代表跨运行共享状态，是与 Local State 对照的反例。
 	// 只创建一个对象，两次运行都接收 shared 指针的副本。
 	// 指针值虽然被复制了，但两个指针仍然指向同一块数据。
 	shared := &queryState{}
@@ -25,6 +26,7 @@ func TestSharedStateIsOverwritten(t *testing.T) {
 }
 
 func TestStateFactoryCreatesIndependentState(t *testing.T) {
+	// 该场景代表 Local State：每次运行通过工厂获得自己的状态对象。
 	// 两次都传入同一个函数值，但该函数每次调用都会执行 &queryState{}。
 	first := runWithStateFactory(context.Background(), newQueryState, "first")
 	second := runWithStateFactory(context.Background(), newQueryState, "second")
