@@ -2,6 +2,8 @@
 
 本目录收纳用于理解 Eino 示例中 Go 语言写法的最小实验。每个主题使用独立子目录，默认只依赖 Go 标准库，避免框架 API 干扰语言概念理解。
 
+建议先阅读 [Go 框架 API 设计学习路线](framework-api-design/README.md)，再按顺序完成对应示例。后续相关练习统一放入 `framework-api-design/`。
+
 ## 当前主题
 
 - [状态工厂函数](local-state-factory/README.md)：对比共享状态对象与按次创建状态，理解函数作为参数和运行状态隔离。
