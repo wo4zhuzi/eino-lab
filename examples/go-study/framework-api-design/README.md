@@ -79,6 +79,8 @@ func withPrefix(prefix string) Handler {
 
 通过标准：能指出 `withPrefix` 返回的是函数，不是最终字符串。
 
+可运行示例：[03-higher-order-function](03-higher-order-function/README.md)。
+
 推荐搜索：
 
 ```text
