@@ -35,6 +35,8 @@ var handler Handler = validate
 
 通过标准：能说明 `Handler` 是函数类型，`handler` 保存了函数 `validate`。
 
+可运行示例：[01-function-type](01-function-type/README.md)。
+
 推荐搜索：
 
 ```text
