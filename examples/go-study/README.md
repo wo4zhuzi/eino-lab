@@ -7,6 +7,7 @@
 ## 当前主题
 
 - [框架 API 设计 01：Go 函数类型](framework-api-design/01-function-type/README.md)：理解如何定义函数类型，以及如何把具体函数保存到变量和结构体字段中。
+- [框架 API 设计 02：函数作为参数](framework-api-design/02-function-as-parameter/README.md)：把变化的风控规则交给固定订单检查流程，避免重复公共校验和错误处理。
 - [状态工厂函数](local-state-factory/README.md)：对比共享状态对象与按次创建状态，理解函数作为参数和运行状态隔离。
 - [回调状态注入](callback-state-injection/README.md)：用迷你 Graph 展开框架调用 PostHandler 并传入 Local State 的过程。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。

@@ -56,6 +56,8 @@ func execute(input string, handler Handler) (string, error) {
 
 通过标准：能区分 `execute("x", validate)` 与 `validate("x")`。
 
+可运行示例：[02-function-as-parameter](02-function-as-parameter/README.md)。
+
 推荐搜索：
 
 ```text
