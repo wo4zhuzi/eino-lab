@@ -182,6 +182,8 @@ Error：主要逻辑出错时
 
 通过标准：能根据名称判断 `PreHandler`、`PostHandler`、`ErrorHandler` 的执行时机。
 
+可运行示例：[07-lifecycle-hooks](07-lifecycle-hooks/README.md)。
+
 推荐搜索：
 
 ```text
