@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type order struct {
 	id     string
@@ -22,15 +25,24 @@ func (l *orderEventLoop) Register(handler OrderHandler) error {
 	return nil
 }
 
-// Run 模拟框架收到订单事件后，在约定时机调用已注册的业务回调。
-func (l *orderEventLoop) Run(current order) error {
+// Run 持续等待订单事件，并由事件循环调用已注册的业务回调。
+func (l *orderEventLoop) Run(ctx context.Context, orders <-chan order) error {
 	if l.handler == nil {
 		return fmt.Errorf("订单回调尚未注册")
 	}
-	if err := l.handler(current); err != nil {
-		return fmt.Errorf("处理订单 %s 失败: %w", current.id, err)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("订单事件循环结束: %w", ctx.Err())
+		case current, ok := <-orders:
+			if !ok {
+				return nil
+			}
+			if err := l.handler(current); err != nil {
+				return fmt.Errorf("处理订单 %s 失败: %w", current.id, err)
+			}
+		}
 	}
-	return nil
 }
 
 func checkAmount(current order) error {
@@ -50,7 +62,14 @@ func main() {
 	}
 	fmt.Println("订单回调已注册")
 
-	// 调用位置：事件到达后，事件循环决定调用时机并传入订单。
-	err := loop.Run(order{id: "order-001", amount: 3000})
-	fmt.Printf("订单事件处理：%v\n", err)
+	// 订单由外部事件源产生，业务代码不直接调用 checkAmount。
+	orders := make(chan order, 2)
+	orders <- order{id: "order-001", amount: 800}
+	orders <- order{id: "order-002", amount: 3000}
+	close(orders)
+
+	// 事件循环负责等待事件、传入订单，并在回调失败时停止运行。
+	if err := loop.Run(context.Background(), orders); err != nil {
+		fmt.Printf("订单事件循环：%v\n", err)
+	}
 }

@@ -2,7 +2,7 @@
 
 ## 这个案例解决什么问题
 
-订单事件循环负责等待事件，但订单到达后执行什么业务检查，应由业务代码决定。如果事件循环直接调用固定的 `checkAmount`，以后替换规则就必须修改事件循环。
+订单可能来自消息队列、网络连接或其他外部事件源，业务代码不知道下一笔订单何时到达。事件循环负责持续等待订单，但订单到达后执行什么业务检查，应由业务代码决定。如果事件循环直接调用固定的 `checkAmount`，以后替换规则就必须修改事件循环。
 
 回调把“何时执行”和“执行什么”分开：
 
@@ -33,26 +33,55 @@ func (l *orderEventLoop) Register(handler OrderHandler) error {
 }
 ```
 
-`Run` 是真正的调用位置。事件循环在订单到达后传入参数并执行已登记的函数：
+`Run` 是真正的调用位置。它持续等待订单通道，在事件到达后传入参数并执行已登记的函数：
 
 ```go
-func (l *orderEventLoop) Run(current order) error {
+func (l *orderEventLoop) Run(ctx context.Context, orders <-chan order) error {
     if l.handler == nil {
         return fmt.Errorf("订单回调尚未注册")
     }
-    if err := l.handler(current); err != nil {
-        return fmt.Errorf("处理订单 %s 失败: %w", current.id, err)
+    for {
+        select {
+        case <-ctx.Done():
+            return fmt.Errorf("订单事件循环结束: %w", ctx.Err())
+        case current, ok := <-orders:
+            if !ok {
+                return nil
+            }
+            if err := l.handler(current); err != nil {
+                return fmt.Errorf("处理订单 %s 失败: %w", current.id, err)
+            }
+        }
     }
-    return nil
 }
 ```
 
 调用方只负责登记业务行为和启动事件处理：
 
 ```go
-loop.Register(checkAmount) // 注册函数值，此时不执行
-loop.Run(current)          // 事件发生后，事件循环执行回调
+loop.Register(checkAmount)                 // 业务声明订单到达后做什么
+loop.Run(context.Background(), orderEvents) // 框架等待事件并执行回调
 ```
+
+## 为什么不直接调用函数
+
+如果订单已经在当前业务代码手中，而且只需要处理一次，直接调用更简单：
+
+```go
+err := checkAmount(current)
+```
+
+回调适用于调用时机由另一个组件掌握的场景。本例中业务代码只注册 `checkAmount`，并不在发送订单时调用它：
+
+```text
+业务代码：注册 checkAmount，定义“订单到达后做什么”
+外部事件源：在未知时刻产生订单
+事件循环：等待订单，决定何时调用 checkAmount，并处理取消和错误
+```
+
+如果不用回调，业务代码就必须自己接管等待、循环、取消和错误处理。回调让事件循环保持通用，同时允许不同应用替换订单处理规则。
+
+典型应用包括消息队列消费者、HTTP 路由、定时任务、UI 事件和框架生命周期钩子。没有外部事件或框架控制流程时，不应为了使用回调而使用回调。
 
 ## 回调与普通函数参数的区别
 
@@ -93,9 +122,9 @@ go test ./examples/go-study/framework-api-design/04-callback-function
 
 ```text
 订单回调已注册
-订单事件处理：处理订单 order-001 失败: 金额 3000 元超过限额 1000 元
+订单事件循环：处理订单 order-002 失败: 金额 3000 元超过限额 1000 元
 ```
 
-第一行先出现，说明注册本身没有执行订单检查；调用 `Run` 后才得到检查错误。
+第一行先出现，说明注册本身没有执行订单检查。事件循环随后依次接收两笔订单，第一笔通过，第二笔失败并停止循环。
 
-已知限制：本示例只注册一个同步回调，不讨论多个订阅者、并发执行和取消。框架如何通过回调反转控制权，会在第 6 个示例中继续学习。
+已知限制：本示例只注册一个同步回调，因此再次注册会覆盖之前的回调；它不讨论多个订阅者和并发执行。框架如何通过回调反转控制权，会在第 6 个示例中继续学习。
