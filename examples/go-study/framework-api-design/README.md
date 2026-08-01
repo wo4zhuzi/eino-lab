@@ -204,6 +204,8 @@ type Middleware func(Handler) Handler
 
 通过标准：能说明中间件为什么同时接收 Handler 并返回 Handler，以及多个中间件的包裹顺序。
 
+可运行示例：[08-middleware](08-middleware/README.md)。
+
 推荐搜索：
 
 ```text
