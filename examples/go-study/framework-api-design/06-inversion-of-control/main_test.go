@@ -15,8 +15,8 @@ func TestNodesShareStateWithinOneRun(t *testing.T) {
 	if state.question != "已校验：问题" {
 		t.Fatalf("state.question = %q, want %q", state.question, "已校验：问题")
 	}
-	if output != "回答基于：已校验：问题" {
-		t.Fatalf("output = %q, want %q", output, "回答基于：已校验：问题")
+	if output != "回答草稿；回答基于：已校验：问题" {
+		t.Fatalf("output = %q, want %q", output, "回答草稿；回答基于：已校验：问题")
 	}
 }
 

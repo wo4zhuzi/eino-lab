@@ -107,10 +107,10 @@ for _, current := range g.nodes {
 ```go
 func answerFromState(
     _ context.Context,
-    _ string,
+    draft string,
     state *queryState,
 ) (string, error) {
-    return "回答基于：" + state.question, nil
+    return draft + "；回答基于：" + state.question, nil
 }
 ```
 
@@ -160,7 +160,7 @@ go run ./examples/go-study/framework-api-design/06-inversion-of-control
 
 ```text
 节点 1 保存的状态："已校验：state 从哪里来？"
-节点 2 读取状态后的输出："回答基于：已校验：state 从哪里来？"
+节点 2 读取状态后的输出："回答草稿；回答基于：已校验：state 从哪里来？"
 ```
 
 ## 验证

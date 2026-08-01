@@ -47,10 +47,10 @@ func saveQuestion(
 // answerFromState 模拟后续节点读取前一个节点保存的 Local State。
 func answerFromState(
 	_ context.Context,
-	_ string,
+	draft string,
 	state *queryState,
 ) (string, error) {
-	return "回答基于：" + state.question, nil
+	return draft + "；回答基于：" + state.question, nil
 }
 
 // withStatePostHandler 模拟 compose.WithStatePostHandler。
