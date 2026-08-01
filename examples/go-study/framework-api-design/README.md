@@ -219,7 +219,7 @@ gRPC interceptor 原理
 
 ### 9. Go SDK API 设计
 
-组合知识：配置结构体、Functional Options、接口、回调、错误处理、`context.Context`。
+组合知识：配置结构体、Functional Options、依赖注入、接口、回调、错误处理、`context.Context`。
 
 学习目标：设计稳定、可扩展且不泄漏内部实现的公开 API。
 
@@ -230,6 +230,7 @@ gRPC interceptor 原理
 哪些配置适合 With...？
 哪些扩展使用接口？
 哪些扩展使用函数回调？
+Logger 等外部能力如何通过构造函数注入？
 错误和 context 如何向调用方传播？
 ```
 

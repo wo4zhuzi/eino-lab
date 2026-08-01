@@ -25,18 +25,16 @@ func Chain(final Handler, middlewares ...Middleware) Handler {
 	return wrapped
 }
 
-func loggingMiddleware(logf func(string)) Middleware {
-	return func(next Handler) Handler {
-		return func(ctx context.Context, input string) (string, error) {
-			logf("日志：进入")
-			output, err := next(ctx, input)
-			if err != nil {
-				logf("日志：失败")
-				return "", fmt.Errorf("日志中间件观察到下游失败: %w", err)
-			}
-			logf("日志：退出")
-			return output, nil
+func loggingMiddleware(next Handler) Handler {
+	return func(ctx context.Context, input string) (string, error) {
+		fmt.Println("日志：进入")
+		output, err := next(ctx, input)
+		if err != nil {
+			fmt.Println("日志：失败")
+			return "", fmt.Errorf("日志中间件观察到下游失败: %w", err)
 		}
+		fmt.Println("日志：退出")
+		return output, nil
 	}
 }
 
@@ -67,7 +65,7 @@ func answer(_ context.Context, question string) (string, error) {
 func main() {
 	handler := Chain(
 		answer,
-		loggingMiddleware(func(message string) { fmt.Println(message) }),
+		loggingMiddleware,
 		authenticationMiddleware,
 		contextMiddleware,
 	)

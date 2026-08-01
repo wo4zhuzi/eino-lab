@@ -63,21 +63,14 @@ func TestAuthenticationMiddlewareShortCircuitsChain(t *testing.T) {
 
 func TestLoggingMiddlewarePreservesDownstreamError(t *testing.T) {
 	errBusiness := errors.New("业务失败")
-	var logs []string
 	final := func(_ context.Context, _ string) (string, error) {
 		return "", errBusiness
 	}
-	handler := Chain(final, loggingMiddleware(func(message string) {
-		logs = append(logs, message)
-	}))
+	handler := Chain(final, loggingMiddleware)
 
 	_, err := handler(context.Background(), "input")
 	if !errors.Is(err, errBusiness) {
 		t.Fatalf("handler() error = %v, want errors.Is(errBusiness)", err)
-	}
-	wantLogs := []string{"日志：进入", "日志：失败"}
-	if !reflect.DeepEqual(logs, wantLogs) {
-		t.Fatalf("logs = %#v, want %#v", logs, wantLogs)
 	}
 }
 

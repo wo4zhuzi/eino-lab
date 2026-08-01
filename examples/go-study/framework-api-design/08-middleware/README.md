@@ -16,6 +16,8 @@ type Middleware func(Handler) Handler
 2. 多个中间件为什么形成“先进后出”的洋葱执行顺序。
 3. 中间件如何通过不调用 `next` 来短路后续处理。
 
+本课直接在日志中间件中调用 `fmt.Println`，不引入日志依赖注入。可替换 Logger、接口与构造函数注入将在第 9 课最小 SDK 中统一学习。
+
 ## 为什么接收 Handler
 
 传入的 `Handler` 是链中的下一个处理器。中间件需要调用它，才能把请求继续交给下游：
@@ -34,9 +36,9 @@ func loggingMiddleware(next Handler) Handler {
 
 ```go
 return func(ctx context.Context, input string) (string, error) {
-    log("进入")
+    fmt.Println("进入")
     output, err := next(ctx, input)
-    log("退出")
+    fmt.Println("退出")
     return output, err
 }
 ```
