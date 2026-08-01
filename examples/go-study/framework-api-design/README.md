@@ -103,6 +103,8 @@ register(validate)
 
 通过标准：能够分别找到回调的注册位置和真正调用位置。
 
+可运行示例：[04-callback-function](04-callback-function/README.md)。
+
 推荐搜索：
 
 ```text
