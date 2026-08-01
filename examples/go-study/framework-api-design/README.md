@@ -144,7 +144,7 @@ Go 函数式选项模式
 Go Option 模式
 ```
 
-对应仓库示例：[with-option-naming/main.go](with-option-naming/main.go)。
+可运行示例：[05-functional-options](05-functional-options/README.md)。
 
 ### 6. 控制反转 IoC
 
