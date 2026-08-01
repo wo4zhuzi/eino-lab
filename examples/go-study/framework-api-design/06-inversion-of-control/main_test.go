@@ -5,31 +5,31 @@ import (
 	"testing"
 )
 
-func TestRegisteredHandlerReceivesStateFromFramework(t *testing.T) {
-	configuredNode := addLambdaNode(withStatePostHandler(saveQuestion))
+func TestNodesShareStateWithinOneRun(t *testing.T) {
+	graph := newTestGraph()
 
-	output, state, err := runGraph(context.Background(), "问题", configuredNode)
+	output, state, err := graph.Run(context.Background(), "问题")
 	if err != nil {
-		t.Fatalf("runGraph() error = %v", err)
+		t.Fatalf("graph.Run() error = %v", err)
 	}
-	if output != "已校验：问题" {
-		t.Fatalf("output = %q, want %q", output, "已校验：问题")
+	if state.question != "已校验：问题" {
+		t.Fatalf("state.question = %q, want %q", state.question, "已校验：问题")
 	}
-	if state.question != output {
-		t.Fatalf("state.question = %q, want %q", state.question, output)
+	if output != "回答基于：已校验：问题" {
+		t.Fatalf("output = %q, want %q", output, "回答基于：已校验：问题")
 	}
 }
 
 func TestEachRunCreatesIndependentState(t *testing.T) {
-	configuredNode := addLambdaNode(withStatePostHandler(saveQuestion))
+	graph := newTestGraph()
 
-	_, first, err := runGraph(context.Background(), "第一个问题", configuredNode)
+	_, first, err := graph.Run(context.Background(), "第一个问题")
 	if err != nil {
-		t.Fatalf("first runGraph() error = %v", err)
+		t.Fatalf("first graph.Run() error = %v", err)
 	}
-	_, second, err := runGraph(context.Background(), "第二个问题", configuredNode)
+	_, second, err := graph.Run(context.Background(), "第二个问题")
 	if err != nil {
-		t.Fatalf("second runGraph() error = %v", err)
+		t.Fatalf("second graph.Run() error = %v", err)
 	}
 
 	if first == second {
@@ -38,4 +38,11 @@ func TestEachRunCreatesIndependentState(t *testing.T) {
 	if first.question != "已校验：第一个问题" || second.question != "已校验：第二个问题" {
 		t.Fatalf("状态发生串扰：first=%q, second=%q", first.question, second.question)
 	}
+}
+
+func newTestGraph() *sequentialGraph {
+	return newSequentialGraph(
+		newNode("validate_question", validateQuestion, withStatePostHandler(saveQuestion)),
+		newNode("answer_question", draftAnswer, withStatePostHandler(answerFromState)),
+	)
 }

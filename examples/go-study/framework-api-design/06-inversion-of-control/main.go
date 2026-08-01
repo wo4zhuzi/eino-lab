@@ -28,6 +28,8 @@ type nodeOption func(*nodeConfig)
 
 // node 模拟完成配置后的 Graph 节点。
 type node struct {
+	name   string
+	run    func(context.Context, string) (string, error)
 	config nodeConfig
 }
 
@@ -42,6 +44,15 @@ func saveQuestion(
 	return question, nil
 }
 
+// answerFromState 模拟后续节点读取前一个节点保存的 Local State。
+func answerFromState(
+	_ context.Context,
+	_ string,
+	state *queryState,
+) (string, error) {
+	return "回答基于：" + state.question, nil
+}
+
 // withStatePostHandler 模拟 compose.WithStatePostHandler。
 // 它接收 PostHandler，返回一个节点配置函数。
 func withStatePostHandler(handler statePostHandler) nodeOption {
@@ -50,51 +61,82 @@ func withStatePostHandler(handler statePostHandler) nodeOption {
 	}
 }
 
-// addLambdaNode 模拟 Graph.AddLambdaNode。
-// 它执行所有 Option，把配置保存到节点中。
-func addLambdaNode(options ...nodeOption) *node {
-	configuredNode := &node{}
+// newNode 模拟 Graph.AddLambdaNode 的节点构建过程。
+func newNode(
+	name string,
+	run func(context.Context, string) (string, error),
+	options ...nodeOption,
+) *node {
+	configuredNode := &node{name: name, run: run}
 	for _, option := range options {
 		option(&configuredNode.config)
 	}
 	return configuredNode
 }
 
-// runGraph 模拟 Eino 执行一次 Graph 中的节点。
-func runGraph(ctx context.Context, input string, configuredNode *node) (string, *queryState, error) {
+// sequentialGraph 在构建阶段保存节点拓扑，运行时不再逐个传入节点。
+type sequentialGraph struct {
+	nodes []*node
+}
+
+func newSequentialGraph(nodes ...*node) *sequentialGraph {
+	return &sequentialGraph{nodes: nodes}
+}
+
+// Run 模拟 Eino 执行一次编译后的 Graph。
+func (g *sequentialGraph) Run(
+	ctx context.Context,
+	input string,
+) (string, *queryState, error) {
 	// Eino 的 WithGenLocalState 会为每次运行创建独立状态。
 	state := &queryState{}
-
-	// 假设这是 validateQuestion 节点产生的输出。
-	question := "已校验：" + input
-
-	// 这一行模拟 Eino 从节点配置中取出并调用 PostHandler。
-	// state 就是在这里由框架传给 saveQuestion 的。
-	output, err := configuredNode.config.postHandler(ctx, question, state)
-	if err != nil {
-		return "", state, err
+	output := input
+	for _, current := range g.nodes {
+		var err error
+		output, err = current.run(ctx, output)
+		if err != nil {
+			return "", state, fmt.Errorf("节点 %s 执行失败: %w", current.name, err)
+		}
+		if current.config.postHandler != nil {
+			output, err = current.config.postHandler(ctx, output, state)
+			if err != nil {
+				return "", state, fmt.Errorf("节点 %s PostHandler 执行失败: %w", current.name, err)
+			}
+		}
 	}
-
 	return output, state, nil
 }
 
+func validateQuestion(_ context.Context, input string) (string, error) {
+	return "已校验：" + input, nil
+}
+
+func draftAnswer(_ context.Context, _ string) (string, error) {
+	return "回答草稿", nil
+}
+
 func main() {
-	// withStatePostHandler 返回一个 Option；addLambdaNode 执行 Option，
-	// 把 saveQuestion 保存到节点配置中。此时仍未调用 saveQuestion。
-	configuredNode := addLambdaNode(
+	validateNode := newNode(
+		"validate_question",
+		validateQuestion,
 		withStatePostHandler(saveQuestion),
 	)
+	answerNode := newNode(
+		"answer_question",
+		draftAnswer,
+		withStatePostHandler(answerFromState),
+	)
+	graph := newSequentialGraph(validateNode, answerNode)
 
-	// runGraph 执行时，框架才从节点配置中取出 saveQuestion 并传入 state。
-	output, state, err := runGraph(
+	// 节点在构建阶段已经注册，运行阶段只传本次请求的 ctx 和 input。
+	output, state, err := graph.Run(
 		context.Background(),
 		"state 从哪里来？",
-		configuredNode,
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("节点最终输出：%q\n", output)
-	fmt.Printf("PostHandler 保存的状态：%q\n", state.question)
+	fmt.Printf("节点 1 保存的状态：%q\n", state.question)
+	fmt.Printf("节点 2 读取状态后的输出：%q\n", output)
 }
