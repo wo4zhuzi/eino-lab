@@ -12,5 +12,5 @@
 - [框架 API 设计 04：回调函数](framework-api-design/04-callback-function/README.md)：分开注册与执行位置，理解事件循环如何在事件发生后调用业务函数。
 - [框架 API 设计 05：Functional Options](framework-api-design/05-functional-options/README.md)：用默认模型客户端配置与按需覆盖，理解 `With...` 选项解决的位置参数和 API 演进问题。
 - [状态工厂函数](local-state-factory/README.md)：对比共享状态对象与按次创建状态，理解函数作为参数和运行状态隔离。
-- [回调状态注入](callback-state-injection/README.md)：用迷你 Graph 展开框架调用 PostHandler 并传入 Local State 的过程。
+- [框架 API 设计 06：控制反转 IoC](framework-api-design/06-inversion-of-control/README.md)：用迷你 Graph 展开框架调用 PostHandler 并传入 Local State 的过程。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。

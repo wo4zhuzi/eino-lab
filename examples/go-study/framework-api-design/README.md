@@ -166,7 +166,7 @@ Go 控制反转 IoC
 Go 回调 控制反转
 ```
 
-对应仓库示例：[callback-state-injection/main.go](callback-state-injection/main.go)。
+可运行示例：[06-inversion-of-control](06-inversion-of-control/README.md)。
 
 ### 7. 生命周期钩子
 

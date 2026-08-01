@@ -1,6 +1,6 @@
-# 回调状态注入最小示例
+# 06. 控制反转 IoC
 
-相关命名规则见 [`With...` 配置命名示例](../with-option-naming/main.go)。
+前置知识见 [04. 回调函数](../04-callback-function/README.md)和 [05. Functional Options](../05-functional-options/README.md)。
 
 ## 学习目标
 
@@ -105,7 +105,7 @@ Eino 内部还会将状态放入运行 `context`、按类型读取并使用互�
 在仓库根目录执行：
 
 ```bash
-go run ./examples/go-study/callback-state-injection
+go run ./examples/go-study/framework-api-design/06-inversion-of-control
 ```
 
 预期输出：
@@ -118,8 +118,8 @@ PostHandler 保存的状态："已校验：state 从哪里来？"
 ## 验证
 
 ```bash
-go test ./examples/go-study/callback-state-injection -count=1
-go test -race ./examples/go-study/callback-state-injection -count=1
+go test ./examples/go-study/framework-api-design/06-inversion-of-control -count=1
+go test -race ./examples/go-study/framework-api-design/06-inversion-of-control -count=1
 ```
 
 测试验证框架创建的状态会传给已登记的函数，而且每次运行使用独立状态。
