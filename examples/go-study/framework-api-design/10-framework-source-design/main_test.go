@@ -23,15 +23,15 @@ func TestConfigurationDoesNotCreateStateOrCallPostHandler(t *testing.T) {
 		t.Fatalf("构建后 counts = (%d, %d), want (0, 0)", stateCreations, postCalls)
 	}
 
-	result, err := graph.Invoke(context.Background(), "  配置保存在哪里？  ")
+	result, err := graph.Invoke(context.Background(), ReviewRequest{Question: "  配置保存在哪里？  "})
 	if err != nil {
 		t.Fatalf("Invoke() error = %v", err)
 	}
 	if result.StateID != 1 {
 		t.Fatalf("StateID = %d, want 1", result.StateID)
 	}
-	if result.Output != "回答：配置保存在哪里？ [已记录]" {
-		t.Fatalf("Output = %q", result.Output)
+	if result.Answer != "回答：配置保存在哪里？ [已记录]" {
+		t.Fatalf("Answer = %q", result.Answer)
 	}
 	wantEvents := []string{"post:回答：配置保存在哪里？"}
 	if !reflect.DeepEqual(result.Events, wantEvents) {
@@ -50,14 +50,16 @@ func TestEachInvokeGetsIndependentState(t *testing.T) {
 	}
 
 	const runs = 32
-	results := make(chan TraceResult, runs)
+	results := make(chan ReviewResult, runs)
 	errorsCh := make(chan error, runs)
 	var wait sync.WaitGroup
 	for index := 0; index < runs; index++ {
 		wait.Add(1)
 		go func(index int) {
 			defer wait.Done()
-			result, err := graph.Invoke(context.Background(), fmt.Sprintf("question-%d", index))
+			result, err := graph.Invoke(context.Background(), ReviewRequest{
+				Question: fmt.Sprintf("question-%d", index),
+			})
 			if err != nil {
 				errorsCh <- err
 				return
@@ -91,7 +93,7 @@ func TestEachInvokeGetsIndependentState(t *testing.T) {
 func TestNodeErrorSkipsPostHandler(t *testing.T) {
 	errGenerate := errors.New("生成依赖不可用")
 	graph, err := newTraceGraph(
-		func(context.Context, string) (string, error) {
+		func(context.Context, ReviewRequest) (string, error) {
 			return "", errGenerate
 		},
 		func(_ context.Context, output string, _ *traceState) (string, error) {
@@ -102,7 +104,7 @@ func TestNodeErrorSkipsPostHandler(t *testing.T) {
 		t.Fatalf("newTraceGraph() error = %v", err)
 	}
 
-	_, err = graph.Invoke(context.Background(), "question")
+	_, err = graph.Invoke(context.Background(), ReviewRequest{Question: "question"})
 	if !errors.Is(err, errGenerate) {
 		t.Fatalf("Invoke() error = %v, want errors.Is(errGenerate)", err)
 	}
@@ -115,8 +117,8 @@ func TestNodeErrorSkipsPostHandler(t *testing.T) {
 func TestPostHandlerErrorPreservesRootCause(t *testing.T) {
 	errPost := errors.New("状态写入失败")
 	graph, err := newTraceGraph(
-		func(_ context.Context, input string) (string, error) {
-			return input, nil
+		func(_ context.Context, request ReviewRequest) (string, error) {
+			return request.Question, nil
 		},
 		func(_ context.Context, _ string, _ *traceState) (string, error) {
 			return "", errPost
@@ -126,7 +128,7 @@ func TestPostHandlerErrorPreservesRootCause(t *testing.T) {
 		t.Fatalf("newTraceGraph() error = %v", err)
 	}
 
-	_, err = graph.Invoke(context.Background(), "question")
+	_, err = graph.Invoke(context.Background(), ReviewRequest{Question: "question"})
 	if !errors.Is(err, errPost) {
 		t.Fatalf("Invoke() error = %v, want errors.Is(errPost)", err)
 	}
@@ -140,11 +142,11 @@ func TestPostHandlerErrorPreservesRootCause(t *testing.T) {
 }
 
 func TestAddNodeRejectsPostHandlerWithoutLocalState(t *testing.T) {
-	graph := compose.NewGraph[string, string]()
+	graph := compose.NewGraph[ReviewRequest, string]()
 	err := graph.AddLambdaNode(
 		"node",
-		compose.InvokableLambda(func(_ context.Context, input string) (string, error) {
-			return input, nil
+		compose.InvokableLambda(func(_ context.Context, request ReviewRequest) (string, error) {
+			return request.Question, nil
 		}),
 		compose.WithStatePostHandler(func(_ context.Context, output string, _ *traceState) (string, error) {
 			return output, nil
@@ -156,12 +158,12 @@ func TestAddNodeRejectsPostHandlerWithoutLocalState(t *testing.T) {
 }
 
 func TestAddNodeRejectsPostHandlerOutputTypeMismatch(t *testing.T) {
-	graph := compose.NewGraph[string, int](
+	graph := compose.NewGraph[ReviewRequest, int](
 		compose.WithGenLocalState(func(context.Context) *traceState { return &traceState{} }),
 	)
 	err := graph.AddLambdaNode(
 		"node",
-		compose.InvokableLambda(func(context.Context, string) (int, error) {
+		compose.InvokableLambda(func(context.Context, ReviewRequest) (int, error) {
 			return 1, nil
 		}),
 		compose.WithStatePostHandler(func(_ context.Context, output string, _ *traceState) (string, error) {
@@ -174,7 +176,7 @@ func TestAddNodeRejectsPostHandlerOutputTypeMismatch(t *testing.T) {
 }
 
 func TestNewTraceGraphRejectsNilHandlers(t *testing.T) {
-	validGenerator := func(context.Context, string) (string, error) { return "", nil }
+	validGenerator := func(context.Context, ReviewRequest) (string, error) { return "", nil }
 	validPost := func(_ context.Context, output string, _ *traceState) (string, error) { return output, nil }
 
 	if _, err := newTraceGraph(nil, validPost); !errors.Is(err, ErrNilGenerator) {

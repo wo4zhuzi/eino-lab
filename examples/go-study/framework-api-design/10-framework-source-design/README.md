@@ -102,10 +102,16 @@ Compile 一次 -> 复用同一 Runnable -> 每次 Invoke 创建一个新状态
 本目录构建两个节点：
 
 ```text
-START -> generate + WithStatePostHandler -> build_result -> END
+Graph 对外：ReviewRequest -> ReviewResult
+
+START(ReviewRequest)
+  -> generate(ReviewRequest -> string)
+  -> WithStatePostHandler(string -> string)
+  -> build_result(string -> ReviewResult)
+  -> END(ReviewResult)
 ```
 
-`generate` 生成回答；PostHandler 把原始输出写入状态，并给节点输出追加 ` [已记录]`；`build_result` 通过 `ProcessState` 读取状态快照。
+`ReviewRequest` 和 `ReviewResult` 是 Graph 的业务边界；中间的 `string` 只是节点间数据。`generate` 从请求中读取问题并生成回答；PostHandler 把原始输出写入状态，并给节点输出追加 ` [已记录]`；`build_result` 通过 `ProcessState` 读取状态快照并组装最终结果。
 
 | 实验断言 | 对应源码结论 |
 |---|---|
@@ -132,8 +138,8 @@ go test -race ./examples/go-study/framework-api-design/10-framework-source-desig
 
 ```text
 构建后：state=0 post=0
-运行：state=1 output="回答：配置保存在哪里？ [已记录]" events=["post:回答：配置保存在哪里？"]
-运行：state=2 output="回答：Handler 在哪里调用？ [已记录]" events=["post:回答：Handler 在哪里调用？"]
+运行：state=1 answer="回答：配置保存在哪里？ [已记录]" events=["post:回答：配置保存在哪里？"]
+运行：state=2 answer="回答：Handler 在哪里调用？ [已记录]" events=["post:回答：Handler 在哪里调用？"]
 ```
 
 测试覆盖配置延迟执行、输出改写、并发运行状态隔离、节点错误、PostHandler 错误、缺少 Local State、类型不匹配和 nil 依赖。

@@ -35,20 +35,28 @@ type traceState struct {
 	Events []string
 }
 
-// TraceResult 同时返回业务输出和本次运行的状态快照，便于从 Graph 外部观察：
+// ReviewRequest 是 Graph 对外接收的业务请求。
+// 使用结构体而不是裸 string，可以直接看出 Question 是请求字段；以后增加用户 ID、
+// 会话 ID 等信息时，也不需要修改 Graph 的整体输入类型。
+type ReviewRequest struct {
+	Question string
+}
+
+// ReviewResult 是 Graph 对外返回的业务结果，同时包含本次运行的状态快照，便于观察：
 //  1. PostHandler 是否改写了节点输出；
 //  2. build_result 节点是否读到了同一次运行的 Local State；
 //  3. 多次 Invoke 是否使用了不同状态。
-type TraceResult struct {
+type ReviewResult struct {
 	StateID uint64
-	Output  string
+	Answer  string
 	Events  []string
 }
 
 // generator 描述 generate 节点的核心业务函数。
-// 它与 Eino InvokeWOOpt[string, string] 的底层签名一致，但这是一个独立的命名类型，
+// 它把 Graph 的 ReviewRequest 输入转换成节点间传递的 string 回答。
+// 它与 Eino InvokeWOOpt[ReviewRequest, string] 的底层签名一致，但这是一个独立的命名类型，
 // 注册 Lambda 时需要显式转换，才能满足 InvokableLambda 的泛型参数要求。
-type generator func(context.Context, string) (string, error)
+type generator func(context.Context, ReviewRequest) (string, error)
 
 // postHandler 描述 generate 节点成功后的状态处理函数。
 // 返回的 string 会替换 generate 的原始输出并传给下游，因此它既可以只记录状态，
@@ -60,7 +68,7 @@ type postHandler func(context.Context, string, *traceState) (string, error)
 // stateCreations 和 postCalls 不是业务状态，只是本课的观测探针。Runnable 可以被
 // 多个 goroutine 并发 Invoke，所以计数器使用 atomic，避免示例自身引入数据竞争。
 type traceGraph struct {
-	runnable       compose.Runnable[string, TraceResult]
+	runnable       compose.Runnable[ReviewRequest, ReviewResult]
 	stateCreations atomic.Uint64
 	postCalls      atomic.Uint64
 }
@@ -91,7 +99,16 @@ func newTraceGraph(generate generator, post postHandler) (*traceGraph, error) {
 	// WithGenLocalState 保存的是“状态生成函数”，此处不会立刻调用它。
 	// Compile 会把它转换为 runner.runCtx；每次新的 Runnable.Invoke 开始时，
 	// runner.runCtx 才调用该函数，并把返回的 *traceState 放入本次运行的 context。
-	graph := compose.NewGraph[string, TraceResult](
+	//
+	// Graph 对外契约：Invoke(ReviewRequest) -> ReviewResult
+	// 完整类型流：
+	//
+	//	START(ReviewRequest)
+	//	  -> generate: ReviewRequest -> string
+	//	  -> StatePostHandler: string -> string
+	//	  -> build_result: string -> ReviewResult
+	//	  -> END(ReviewResult)
+	graph := compose.NewGraph[ReviewRequest, ReviewResult](
 		compose.WithGenLocalState(func(context.Context) *traceState {
 			return &traceState{ID: result.stateCreations.Add(1)}
 		}),
@@ -101,7 +118,7 @@ func newTraceGraph(generate generator, post postHandler) (*traceGraph, error) {
 		nodeGenerate,
 		// generator 是自定义命名类型，因此显式转换为 Eino 的公开函数类型。
 		// InvokableLambda 只负责把普通函数适配成 Compose 节点，此时不会执行函数。
-		compose.InvokableLambda(compose.InvokeWOOpt[string, string](generate)),
+		compose.InvokableLambda(compose.InvokeWOOpt[ReviewRequest, string](generate)),
 		compose.WithNodeName(nodeGenerate),
 		// WithStatePostHandler 返回 GraphAddNodeOpt。AddLambdaNode 应用该 Option 时，
 		// Eino 会包装 Handler，并立即校验 Graph 是否启用 Local State、状态类型是否
@@ -122,23 +139,23 @@ func newTraceGraph(generate generator, post postHandler) (*traceGraph, error) {
 
 	// build_result 是 generate 的下游节点。它收到的 output 已经是 PostHandler
 	// 返回的新值，因此可以验证 PostHandler 不仅能观察结果，也能改写后续数据流。
-	buildResult := compose.InvokableLambda(func(ctx context.Context, output string) (TraceResult, error) {
-		var traced TraceResult
+	buildResult := compose.InvokableLambda(func(ctx context.Context, output string) (ReviewResult, error) {
+		var reviewed ReviewResult
 
 		// ProcessState 从运行 context 中按类型查找 *traceState，并在回调执行期间持有
 		// 对应 internalState 的互斥锁。业务代码不需要直接管理 Eino 内部的锁。
 		if err := compose.ProcessState[*traceState](ctx, func(_ context.Context, state *traceState) error {
-			traced = TraceResult{
+			reviewed = ReviewResult{
 				StateID: state.ID,
-				Output:  output,
+				Answer:  output,
 				// 在锁内复制切片，避免把 Local State 的底层数组暴露到回调和 Invoke 生命周期外。
 				Events: append([]string(nil), state.Events...),
 			}
 			return nil
 		}); err != nil {
-			return TraceResult{}, fmt.Errorf("读取运行状态: %w", err)
+			return ReviewResult{}, fmt.Errorf("读取运行状态: %w", err)
 		}
-		return traced, nil
+		return reviewed, nil
 	})
 	if err := graph.AddLambdaNode(nodeResult, buildResult, compose.WithNodeName(nodeResult)); err != nil {
 		return nil, fmt.Errorf("添加 %s 节点: %w", nodeResult, err)
@@ -170,8 +187,8 @@ func newDefaultTraceGraph() (*traceGraph, error) {
 	return newTraceGraph(
 		// generate 是节点 action：先规范化输入，再生成原始业务输出。
 		// 若返回 ErrEmptyQuestion，Eino 会直接传播节点错误并跳过下面的 PostHandler。
-		func(_ context.Context, question string) (string, error) {
-			question = strings.TrimSpace(question)
+		func(_ context.Context, request ReviewRequest) (string, error) {
+			question := strings.TrimSpace(request.Question)
 			if question == "" {
 				return "", ErrEmptyQuestion
 			}
@@ -187,10 +204,10 @@ func newDefaultTraceGraph() (*traceGraph, error) {
 	)
 }
 
-func (g *traceGraph) Invoke(ctx context.Context, question string) (TraceResult, error) {
+func (g *traceGraph) Invoke(ctx context.Context, request ReviewRequest) (ReviewResult, error) {
 	// Invoke 会创建本次 Local State，并将派生后的 context 传给节点与 Handler。
 	// 任一节点或 PostHandler 返回错误时，Eino 会附加节点路径，同时保留 Unwrap 错误链。
-	return g.runnable.Invoke(ctx, question)
+	return g.runnable.Invoke(ctx, request)
 }
 
 func (g *traceGraph) Counts() (stateCreations uint64, postCalls uint64) {
@@ -210,11 +227,14 @@ func main() {
 
 	// 同一个 Runnable 连续运行两次。输出中的 StateID 应分别为 1 和 2，证明状态按
 	// Invoke 创建；每次 Events 都只有当前问题的记录，证明运行之间没有状态串扰。
-	for _, question := range []string{"配置保存在哪里？", "Handler 在哪里调用？"} {
-		result, err := graph.Invoke(context.Background(), question)
+	for _, request := range []ReviewRequest{
+		{Question: "配置保存在哪里？"},
+		{Question: "Handler 在哪里调用？"},
+	} {
+		result, err := graph.Invoke(context.Background(), request)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("运行：state=%d output=%q events=%q\n", result.StateID, result.Output, result.Events)
+		fmt.Printf("运行：state=%d answer=%q events=%q\n", result.StateID, result.Answer, result.Events)
 	}
 }
