@@ -31,6 +31,8 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodeInspectRefundNotice,
 				nodeApprove,
 				nodeArchiveApproved,
+				nodeRecordReviewResult,
+				nodeSendApprovedNotice,
 			},
 		},
 		{
@@ -43,6 +45,8 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodeInspectRefundNotice,
 				nodeManualReview,
 				nodeStandardManualQueue,
+				nodeRecordReviewResult,
+				nodeSendManualNotice,
 			},
 		},
 		{
@@ -55,6 +59,8 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodeInspectRefundNotice,
 				nodeManualReview,
 				nodePriorityManualQueue,
+				nodeRecordReviewResult,
+				nodeSendManualNotice,
 			},
 		},
 	}
@@ -107,5 +113,8 @@ func TestRoutesPreserveContextCancellation(t *testing.T) {
 	}
 	if _, err := routeManualQueue(canceledCtx, ReviewResult{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("routeManualQueue() error = %v, want context.Canceled", err)
+	}
+	if _, err := routeNotification(canceledCtx, ReviewResult{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("routeNotification() error = %v, want context.Canceled", err)
 	}
 }

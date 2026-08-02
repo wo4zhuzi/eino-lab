@@ -93,6 +93,32 @@ func enqueuePriorityManualReview(ctx context.Context, result ReviewResult) (Revi
 	return result, nil
 }
 
+// recordReviewResult 是第一个审核 Branch 汇聚后的公共节点。
+// 无论前面走通过路径还是人工审核路径，都会先执行这里，再进入通知 Branch。
+func recordReviewResult(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("记录审核结果: %w", err)
+	}
+	result.Steps = append(result.Steps, nodeRecordReviewResult)
+	return result, nil
+}
+
+func sendApprovedNotice(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("发送审核通过通知: %w", err)
+	}
+	result.Steps = append(result.Steps, nodeSendApprovedNotice)
+	return result, nil
+}
+
+func sendManualReviewNotice(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("发送人工审核通知: %w", err)
+	}
+	result.Steps = append(result.Steps, nodeSendManualNotice)
+	return result, nil
+}
+
 func newReviewResult(current reviewContext, approved bool, route string) ReviewResult {
 	return ReviewResult{
 		Approved: approved,

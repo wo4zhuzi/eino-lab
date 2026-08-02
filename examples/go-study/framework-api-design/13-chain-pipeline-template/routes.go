@@ -28,3 +28,15 @@ func routeManualQueue(ctx context.Context, result ReviewResult) (string, error) 
 	}
 	return nodePriorityManualQueue, nil
 }
+
+// routeNotification 为审核结果记录完成后的第三个 Branch 选择通知节点。
+// 第一个 Branch 的不同路径已经汇聚，所以这里统一接收 ReviewResult。
+func routeNotification(ctx context.Context, result ReviewResult) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("选择通知分支: %w", err)
+	}
+	if result.Approved {
+		return nodeSendApprovedNotice, nil
+	}
+	return nodeSendManualNotice, nil
+}

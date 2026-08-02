@@ -12,6 +12,9 @@ const (
 	nodeManualReview        = "manual_review"
 	nodeStandardManualQueue = "standard_manual_queue"
 	nodePriorityManualQueue = "priority_manual_queue"
+	nodeRecordReviewResult  = "record_review_result"
+	nodeSendApprovedNotice  = "send_approved_notice"
+	nodeSendManualNotice    = "send_manual_review_notice"
 )
 
 var (

@@ -12,14 +12,16 @@ Demo 12 直接使用 Graph API，适合学习底层拓扑；Demo 13 表达相同
 
 | 文件 | 只负责什么 |
 |---|---|
-| [`pipeline.go`](pipeline.go) | 主流水线、分支和每条路径的结构 |
+| [`pipeline.go`](pipeline.go) | 顶层流水线的步骤顺序 |
+| [`review_branch.go`](review_branch.go) | 审核分支、通过路径、人工路径和队列分支 |
+| [`notification_branch.go`](notification_branch.go) | 审核结果记录后的通知分支 |
 | [`nodes.go`](nodes.go) | 每个节点的业务逻辑 |
-| [`routes.go`](routes.go) | 两个 Branch 的条件判断 |
+| [`routes.go`](routes.go) | 三个 Branch 的条件判断 |
 | [`domain.go`](domain.go) | 输入、输出、内部数据和节点名称 |
 | [`main.go`](main.go) | 构建、Invoke 和输出结果 |
 | [`main_test.go`](main_test.go) | 路径互斥、错误和取消验证 |
 
-阅读流程时先只看 `pipeline.go`，需要理解具体业务规则时再进入 `nodes.go` 或 `routes.go`。
+阅读流程时先只看 `pipeline.go`；需要展开审核或通知路径时，再进入对应的 Branch 文件；需要理解具体业务规则时，最后进入 `nodes.go` 或 `routes.go`。
 
 ## 流水线结构
 
@@ -32,7 +34,9 @@ pipeline.
     AppendLambda(compose.InvokableLambda(normalizeReview), compose.WithNodeKey(nodeNormalize)).
     AppendLambda(compose.InvokableLambda(appendChannelNotice), compose.WithNodeKey(nodeAppendChannelNotice)).
     AppendLambda(compose.InvokableLambda(inspectRefundNotice), compose.WithNodeKey(nodeInspectRefundNotice)).
-    AppendBranch(newReviewBranch())
+    AppendBranch(newReviewBranch()).
+    AppendLambda(compose.InvokableLambda(recordReviewResult), compose.WithNodeKey(nodeRecordReviewResult)).
+    AppendBranch(newNotificationBranch())
 ```
 
 完整业务拓扑：
@@ -48,15 +52,56 @@ START(ReviewRequest)
        ├── approve path
        |     -> approve
        |     -> archive_approved_review
-       |     -> END
+       |     -> ReviewResult
        |
        └── manual_review path
              -> manual_review
              -> Branch 2
-                  ├── standard_manual_queue -> END
-                  └── priority_manual_queue -> END
+                  ├── standard_manual_queue -> ReviewResult
+                  └── priority_manual_queue -> ReviewResult
 
-所有 END 最终返回 ReviewResult
+审核路径汇聚为 ReviewResult
+  -> record_review_result
+  -> Branch 3
+       ├── send_approved_notice -> END
+       └── send_manual_review_notice -> END
+```
+
+## Branch 后接 Node，再接 Branch
+
+主 Chain 中现在直接包含用户请求的结构：
+
+```go
+pipeline.
+    AppendBranch(newReviewBranch()).
+    AppendLambda(
+        compose.InvokableLambda(recordReviewResult),
+        compose.WithNodeKey(nodeRecordReviewResult),
+    ).
+    AppendBranch(newNotificationBranch())
+```
+
+运行原理是：
+
+```text
+newReviewBranch 的某一条路径
+  -> 两条路径都输出 ReviewResult
+  -> Chain 自动把路径连接到 record_review_result
+  -> record_review_result 仍输出 ReviewResult
+  -> routeNotification 接收 ReviewResult
+  -> 只选择一个通知节点
+```
+
+这里没有进入 `newReviewBranch` 的下沉层级增加公共节点，因为 `record_review_result` 对通过和人工审核两条路径都要执行。它应该放在父 Chain 的 `AppendBranch` 后面。
+
+新的通知 Branch 单独定义在 `notification_branch.go`：
+
+```go
+func newNotificationBranch() *compose.ChainBranch {
+    return compose.NewChainBranch(routeNotification).
+        AddLambda(nodeSendApprovedNotice, compose.InvokableLambda(sendApprovedNotice)).
+        AddLambda(nodeSendManualNotice, compose.InvokableLambda(sendManualReviewNotice))
+}
 ```
 
 ## 分支就是子流水线
@@ -155,9 +200,9 @@ go test -race ./examples/go-study/framework-api-design/13-chain-pipeline-templat
 预期输出：
 
 ```text
-approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve archive_approved_review] reasons=[包含退款到账说明]
-approved=false route=manual_review score=5 steps=[normalize append_channel_notice inspect_refund_notice manual_review standard_manual_queue] reasons=[缺少退款到账说明]
-approved=false route=manual_review score=3 steps=[normalize append_channel_notice inspect_refund_notice manual_review priority_manual_queue] reasons=[未包含退款说明]
+approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve archive_approved_review record_review_result send_approved_notice] reasons=[包含退款到账说明]
+approved=false route=manual_review score=5 steps=[normalize append_channel_notice inspect_refund_notice manual_review standard_manual_queue record_review_result send_manual_review_notice] reasons=[缺少退款到账说明]
+approved=false route=manual_review score=3 steps=[normalize append_channel_notice inspect_refund_notice manual_review priority_manual_queue record_review_result send_manual_review_notice] reasons=[未包含退款说明]
 ```
 
-测试覆盖三条最终路径互斥、业务错误、nil context、context 取消和两个路由条件的取消传播。
+测试覆盖审核、人工队列和通知三个 Branch 的路径互斥、Branch 后公共节点、业务错误、nil context、context 取消和三个路由条件的取消传播。
