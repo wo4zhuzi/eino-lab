@@ -36,6 +36,9 @@ func checkOrder(current order, rule RiskRule) error {
     if current.id == "" {
         return fmt.Errorf("订单编号不能为空")
     }
+    if rule == nil {
+        return fmt.Errorf("风控规则不能为空")
+    }
     if err := rule(current); err != nil {
         return fmt.Errorf("订单 %s 风控检查失败: %w", current.id, err)
     }
@@ -58,6 +61,7 @@ checkOrder(current, vipRiskRule)
 2. 变化的规则与固定流程分离，新增规则不需要复制完整流程。
 3. 调用方可以为每次调用选择不同规则。
 4. 测试可以传入一个受控函数，确认公共检查失败时不会执行风控规则。
+5. 执行流程在调用前拒绝 nil 函数值，避免因无效扩展点配置而 panic。
 
 推荐用于“处理流程固定，只有其中一个步骤需要替换”的场景，例如排序规则、重试条件、数据过滤、权限判断和框架回调。
 

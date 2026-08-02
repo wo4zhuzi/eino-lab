@@ -43,3 +43,10 @@ func TestCheckOrderPreservesRuleError(t *testing.T) {
 		t.Fatalf("checkOrder() error = %v, want wrapped %v", err, errRiskRejected)
 	}
 }
+
+func TestCheckOrderRejectsNilRule(t *testing.T) {
+	err := checkOrder(order{id: "order-001", amount: 100}, nil)
+	if err == nil {
+		t.Fatal("checkOrder() error = nil, want nil rule error")
+	}
+}

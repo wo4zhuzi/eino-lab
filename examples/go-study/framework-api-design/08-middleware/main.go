@@ -31,7 +31,7 @@ func loggingMiddleware(next Handler) Handler {
 		output, err := next(ctx, input)
 		if err != nil {
 			fmt.Println("日志：失败")
-			return "", fmt.Errorf("日志中间件观察到下游失败: %w", err)
+			return output, fmt.Errorf("日志中间件观察到下游失败: %w", err)
 		}
 		fmt.Println("日志：退出")
 		return output, nil
@@ -66,8 +66,8 @@ func main() {
 	handler := Chain(
 		answer,
 		loggingMiddleware,
-		authenticationMiddleware,
 		contextMiddleware,
+		authenticationMiddleware,
 	)
 
 	ctx := context.WithValue(context.Background(), principalKey{}, "user-001")

@@ -30,6 +30,9 @@ type riskNode struct {
 }
 
 func (n riskNode) Check(current order) error {
+	if n.rule == nil {
+		return fmt.Errorf("风控规则不能为空")
+	}
 	return n.rule(current)
 }
 

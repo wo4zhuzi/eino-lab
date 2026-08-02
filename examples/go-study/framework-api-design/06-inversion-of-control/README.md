@@ -10,7 +10,7 @@
 compose.WithStatePostHandler(saveQuestion)
 ```
 
-需要理解两个问题：
+需要理解四个问题：
 
 1. 为什么这里只写 `saveQuestion`，没有写 `saveQuestion(...)`。
 2. `saveQuestion` 的 `state` 参数最终从哪里传入。
@@ -148,6 +148,8 @@ output, err = current.config.postHandler(ctx, output, state)
 
 Eino 内部还会将状态放入运行 `context`、按类型读取并使用互斥锁保护。本示例省略这些机制，只保留调用关系。
 
+以上对应关系已按 Eino `v0.9.12` 源码核对，关键位置是 [`compose/graph_add_node_options.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/graph_add_node_options.go) 的 `WithStatePostHandler` 和 [`compose/state.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/state.go) 的 `StatePostHandler`、状态读取及互斥锁实现。
+
 ## 运行
 
 在仓库根目录执行：
@@ -170,7 +172,7 @@ go test ./examples/go-study/framework-api-design/06-inversion-of-control -count=
 go test -race ./examples/go-study/framework-api-design/06-inversion-of-control -count=1
 ```
 
-测试分别验证两条边界：同一次运行的两个节点共享状态，而且每次运行使用独立状态。
+测试验证三条边界：同一次运行的两个节点共享状态、连续运行使用独立状态，以及并发运行不会串扰。并发测试使 `go test -race` 能实际检查 Graph 复用时的共享内存访问。
 
 ## 阅读顺序
 

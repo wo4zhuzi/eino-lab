@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -39,6 +40,7 @@ type modelClient struct {
 }
 
 func NewModelClient(endpoint string, options ...Option) (*modelClient, error) {
+	endpoint = strings.TrimSpace(endpoint)
 	if endpoint == "" {
 		return nil, fmt.Errorf("模型服务地址不能为空")
 	}

@@ -50,3 +50,30 @@ func TestNewModelClientRejectsNilOption(t *testing.T) {
 		t.Fatalf("NewModelClient() error = %v, want nil option error", err)
 	}
 }
+
+func TestOptionsRejectInvalidValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		option Option
+		want   string
+	}{
+		{name: "zero timeout", option: WithTimeout(0), want: "超时时间必须大于 0"},
+		{name: "negative retries", option: WithMaxRetries(-1), want: "最大重试次数不能小于 0"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewModelClient("https://model.example.com", test.option)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("NewModelClient() error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestNewModelClientRejectsBlankEndpoint(t *testing.T) {
+	_, err := NewModelClient("   ")
+	if err == nil {
+		t.Fatal("NewModelClient() error = nil, want blank endpoint error")
+	}
+}

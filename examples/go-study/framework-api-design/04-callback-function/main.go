@@ -31,10 +31,16 @@ func (l *orderEventLoop) Run(ctx context.Context, orders <-chan order) error {
 		return fmt.Errorf("订单回调尚未注册")
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("订单事件循环结束: %w", err)
+		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("订单事件循环结束: %w", ctx.Err())
 		case current, ok := <-orders:
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("订单事件循环结束: %w", err)
+			}
 			if !ok {
 				return nil
 			}

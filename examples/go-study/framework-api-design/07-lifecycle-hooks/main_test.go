@@ -91,7 +91,13 @@ func TestRunReportsCanceledContextBeforeOtherStages(t *testing.T) {
 			return "", nil
 		},
 		hooks: hooks{
-			onError: func(_ context.Context, err error) error {
+			onError: func(hookCtx context.Context, err error) error {
+				if hookCtx.Err() != nil {
+					t.Fatalf("ErrorHook context error = %v, want active reporting context", hookCtx.Err())
+				}
+				if _, ok := hookCtx.Deadline(); !ok {
+					t.Fatal("ErrorHook context should have a bounded reporting deadline")
+				}
 				observed = err
 				return nil
 			},
@@ -104,6 +110,55 @@ func TestRunReportsCanceledContextBeforeOtherStages(t *testing.T) {
 	}
 	if !errors.Is(observed, context.Canceled) {
 		t.Fatalf("ErrorHook observed = %v, want context.Canceled", observed)
+	}
+}
+
+func TestBeforeHookFailureCallsErrorHookAndSkipsRun(t *testing.T) {
+	errBefore := errors.New("前置处理失败")
+	var observed error
+	runner := taskRunner{
+		run: func(context.Context, string) (string, error) {
+			t.Fatal("BeforeHook 失败后不应执行主逻辑")
+			return "", nil
+		},
+		hooks: hooks{
+			before: func(context.Context, string) (string, error) {
+				return "", errBefore
+			},
+			onError: func(_ context.Context, err error) error {
+				observed = err
+				return nil
+			},
+		},
+	}
+
+	_, err := runner.Run(context.Background(), "input")
+	if !errors.Is(err, errBefore) || !errors.Is(observed, errBefore) {
+		t.Fatalf("Run() error = %v, observed = %v, want errBefore", err, observed)
+	}
+}
+
+func TestAfterHookFailureCallsErrorHook(t *testing.T) {
+	errAfter := errors.New("后置处理失败")
+	var observed error
+	runner := taskRunner{
+		run: func(context.Context, string) (string, error) {
+			return "result", nil
+		},
+		hooks: hooks{
+			after: func(context.Context, string) (string, error) {
+				return "", errAfter
+			},
+			onError: func(_ context.Context, err error) error {
+				observed = err
+				return nil
+			},
+		},
+	}
+
+	_, err := runner.Run(context.Background(), "input")
+	if !errors.Is(err, errAfter) || !errors.Is(observed, errAfter) {
+		t.Fatalf("Run() error = %v, observed = %v, want errAfter", err, observed)
 	}
 }
 

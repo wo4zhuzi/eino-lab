@@ -48,6 +48,8 @@ runner := taskRunner{
 
 每个阶段使用 `%w` 补充位置上下文，因此调用方仍可使用 `errors.Is` 判断业务错误或 `context.Canceled`。如果 `ErrorHook` 自身也失败，示例使用 `errors.Join` 同时保留原始执行错误和钩子错误，不让观测故障覆盖根因。
 
+当原 context 已取消时，直接把它交给 ErrorHook 会导致遵守 context 的日志或告警立即失败。本示例使用 `context.WithoutCancel` 保留 context value，再派生 1 秒超时用于有界上报；原 context 仍然有效时则继续沿用它。
+
 ## 与中间件的边界
 
 生命周期钩子由执行器预先定义固定时点。中间件则接收并返回一个完整 Handler，可以包裹整个调用并自由决定是否、何时以及调用几次下一个 Handler。下一课会专门验证中间件的包裹顺序，本课不混合这两种机制。
@@ -71,7 +73,7 @@ ErrorHook 观察到：BeforeHook 执行失败: 问题不能为空
 失败结果：BeforeHook 执行失败: 问题不能为空
 ```
 
-测试覆盖正常顺序、主逻辑错误、取消传播，以及 ErrorHook 自身失败时保留两条错误链。
+测试覆盖正常顺序、BeforeHook、主逻辑和 AfterHook 错误、取消传播与有界上报 context，以及 ErrorHook 自身失败时保留两条错误链。
 
 ## 已知限制
 

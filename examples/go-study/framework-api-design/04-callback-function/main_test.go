@@ -91,3 +91,20 @@ func TestRunStopsWhenContextIsCanceled(t *testing.T) {
 		t.Fatalf("Run() error = %v, want wrapped %v", err, context.Canceled)
 	}
 }
+
+func TestCanceledContextTakesPriorityOverClosedChannel(t *testing.T) {
+	loop := &orderEventLoop{}
+	if err := loop.Register(func(order) error { return nil }); err != nil {
+		t.Fatalf("Register() error = %v, want nil", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	orders := make(chan order)
+	close(orders)
+
+	err := loop.Run(ctx, orders)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want wrapped %v", err, context.Canceled)
+	}
+}

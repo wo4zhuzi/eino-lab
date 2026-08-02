@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var errEmptyQuestion = errors.New("问题不能为空")
+
+const errorHookTimeout = time.Second
 
 type handler func(context.Context, string) (string, error)
 type beforeHook func(context.Context, string) (string, error)
@@ -58,7 +61,15 @@ func (r taskRunner) handleError(ctx context.Context, runErr error) error {
 	if r.hooks.onError == nil {
 		return runErr
 	}
-	if hookErr := r.hooks.onError(ctx, runErr); hookErr != nil {
+
+	hookCtx := ctx
+	cancel := func() {}
+	if ctx.Err() != nil {
+		hookCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), errorHookTimeout)
+	}
+	defer cancel()
+
+	if hookErr := r.hooks.onError(hookCtx, runErr); hookErr != nil {
 		return errors.Join(runErr, fmt.Errorf("ErrorHook 执行失败: %w", hookErr))
 	}
 	return runErr

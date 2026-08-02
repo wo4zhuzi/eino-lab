@@ -109,4 +109,4 @@ default timeout=10s retries=2
 batch timeout=30s retries=5
 ```
 
-测试覆盖默认值、选项覆盖、非法选项和错误链。
+测试覆盖默认值、选项覆盖、非法超时与重试次数、空白服务地址、nil Option 和错误链。

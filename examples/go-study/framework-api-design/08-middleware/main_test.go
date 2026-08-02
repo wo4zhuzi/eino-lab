@@ -64,13 +64,16 @@ func TestAuthenticationMiddlewareShortCircuitsChain(t *testing.T) {
 func TestLoggingMiddlewarePreservesDownstreamError(t *testing.T) {
 	errBusiness := errors.New("业务失败")
 	final := func(_ context.Context, _ string) (string, error) {
-		return "", errBusiness
+		return "partial-result", errBusiness
 	}
 	handler := Chain(final, loggingMiddleware)
 
-	_, err := handler(context.Background(), "input")
+	output, err := handler(context.Background(), "input")
 	if !errors.Is(err, errBusiness) {
 		t.Fatalf("handler() error = %v, want errors.Is(errBusiness)", err)
+	}
+	if output != "partial-result" {
+		t.Fatalf("handler() output = %q, want downstream partial output", output)
 	}
 }
 
@@ -106,5 +109,16 @@ func TestChainWithoutMiddlewareCallsFinalDirectly(t *testing.T) {
 	}
 	if output != "handled:input" {
 		t.Fatalf("handler() output = %q, want %q", output, "handled:input")
+	}
+}
+
+func TestOuterContextMiddlewareTakesPriorityOverAuthentication(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	handler := Chain(answer, contextMiddleware, authenticationMiddleware)
+	_, err := handler(ctx, "input")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("handler() error = %v, want context.Canceled", err)
 	}
 }

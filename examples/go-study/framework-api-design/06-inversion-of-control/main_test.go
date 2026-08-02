@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -37,6 +39,38 @@ func TestEachRunCreatesIndependentState(t *testing.T) {
 	}
 	if first.question != "已校验：第一个问题" || second.question != "已校验：第二个问题" {
 		t.Fatalf("状态发生串扰：first=%q, second=%q", first.question, second.question)
+	}
+}
+
+func TestConcurrentRunsUseIndependentState(t *testing.T) {
+	graph := newTestGraph()
+	const runCount = 20
+
+	var waitGroup sync.WaitGroup
+	errors := make(chan error, runCount)
+	for index := range runCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+
+			input := fmt.Sprintf("问题-%d", index)
+			output, state, err := graph.Run(context.Background(), input)
+			if err != nil {
+				errors <- fmt.Errorf("graph.Run(%q): %w", input, err)
+				return
+			}
+			wantState := "已校验：" + input
+			wantOutput := "回答草稿；回答基于：" + wantState
+			if state.question != wantState || output != wantOutput {
+				errors <- fmt.Errorf("运行 %q 状态串扰: state=%q output=%q", input, state.question, output)
+			}
+		}()
+	}
+	waitGroup.Wait()
+	close(errors)
+
+	for err := range errors {
+		t.Error(err)
 	}
 }
 

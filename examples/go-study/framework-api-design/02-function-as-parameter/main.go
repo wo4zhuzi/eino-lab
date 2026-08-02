@@ -28,6 +28,9 @@ func checkOrder(current order, rule RiskRule) error {
 	if current.id == "" {
 		return fmt.Errorf("订单编号不能为空")
 	}
+	if rule == nil {
+		return fmt.Errorf("风控规则不能为空")
+	}
 	if err := rule(current); err != nil {
 		return fmt.Errorf("订单 %s 风控检查失败: %w", current.id, err)
 	}

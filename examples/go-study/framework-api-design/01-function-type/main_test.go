@@ -15,3 +15,10 @@ func TestRiskNodeUsesConfiguredRule(t *testing.T) {
 		t.Fatalf("vipNode.Check() error = %v, want nil", err)
 	}
 }
+
+func TestRiskNodeRejectsMissingRule(t *testing.T) {
+	err := (riskNode{}).Check(order{amount: 100})
+	if err == nil {
+		t.Fatal("riskNode.Check() error = nil, want missing rule error")
+	}
+}
