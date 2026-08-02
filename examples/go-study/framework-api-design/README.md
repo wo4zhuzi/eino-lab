@@ -223,6 +223,8 @@ gRPC interceptor 原理
 
 学习目标：设计稳定、可扩展且不泄漏内部实现的公开 API。
 
+可运行示例：[09-sdk-api-design](09-sdk-api-design/README.md)。
+
 重点问题：
 
 ```text
