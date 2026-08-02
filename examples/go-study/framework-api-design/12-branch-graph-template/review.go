@@ -15,6 +15,7 @@ const (
 	nodeAppendChannelNotice = "append_channel_notice"
 	nodeInspectRefundNotice = "inspect_refund_notice"
 	nodeApprove             = "approve"
+	nodeArchiveApproved     = "archive_approved_review"
 	nodeManualReview        = "manual_review"
 )
 
@@ -81,6 +82,11 @@ func defineReviewGraph(graph *compose.Graph[ReviewRequest, ReviewResult]) error 
 	if err := addReviewNode(graph, nodeApprove, approveReview); err != nil {
 		return err
 	}
+	// archive_approved_review 只属于通过分支。
+	// 它接收 approve 节点生成的 ReviewResult，并继续返回 ReviewResult。
+	if err := addReviewNode(graph, nodeArchiveApproved, archiveApprovedReview); err != nil {
+		return err
+	}
 	if err := addReviewNode(graph, nodeManualReview, sendToManualReview); err != nil {
 		return err
 	}
@@ -113,11 +119,22 @@ func defineReviewGraph(graph *compose.Graph[ReviewRequest, ReviewResult]) error 
 		return fmt.Errorf("在节点 %s 后添加审核分支: %w", nodeInspectRefundNotice, err)
 	}
 
-	// 分支目标节点仍需连接 END。两个节点都把 reviewContext 转换为 ReviewResult，
-	// 因此它们的输出都符合 Graph 一开始定义好的最终输出类型。
-	for _, node := range []string{nodeApprove, nodeManualReview} {
-		if err := graph.AddEdge(node, compose.END); err != nil {
-			return fmt.Errorf("添加边 %s -> %s: %w", node, compose.END, err)
+	// -------------------- 注册分支后的固定 Edge --------------------
+	// approve 路径比 manual_review 多执行一个归档节点：
+	//
+	//	approve -> archive_approved_review -> END
+	//	manual_review -----------------------> END
+	//
+	// AddBranch 只负责选择第一个目标节点，不会自动推导目标节点后面的路径，
+	// 所以这里仍然要显式连接每一条分支的后续 Edge。
+	branchEdges := [][2]string{
+		{nodeApprove, nodeArchiveApproved},
+		{nodeArchiveApproved, compose.END},
+		{nodeManualReview, compose.END},
+	}
+	for _, edge := range branchEdges {
+		if err := graph.AddEdge(edge[0], edge[1]); err != nil {
+			return fmt.Errorf("添加边 %s -> %s: %w", edge[0], edge[1], err)
 		}
 	}
 	return nil
@@ -203,6 +220,18 @@ func approveReview(ctx context.Context, current reviewContext) (ReviewResult, er
 	}
 	current.steps = append(current.steps, nodeApprove)
 	return newReviewResult(current, true, nodeApprove), nil
+}
+
+// archiveApprovedReview 是本次新增的普通节点，只连接在 approve 分支后面。
+//
+// Branch 条件仍然只需要返回 approve；Eino 执行完 approve 后，会根据固定 Edge
+// 继续调用本节点。manual_review 没有指向本节点的 Edge，因此不会执行这里。
+func archiveApprovedReview(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("归档通过结果: %w", err)
+	}
+	result.Steps = append(result.Steps, nodeArchiveApproved)
+	return result, nil
 }
 
 func sendToManualReview(ctx context.Context, current reviewContext) (ReviewResult, error) {

@@ -30,6 +30,7 @@ func TestReviewGraphSelectsApproveBranch(t *testing.T) {
 		nodeAppendChannelNotice,
 		nodeInspectRefundNotice,
 		nodeApprove,
+		nodeArchiveApproved,
 	}
 	if !reflect.DeepEqual(result.Steps, wantSteps) {
 		t.Fatalf("Steps = %#v, want %#v", result.Steps, wantSteps)
@@ -65,6 +66,9 @@ func TestReviewGraphSelectsManualReviewBranch(t *testing.T) {
 	}
 	if contains(result.Steps, nodeApprove) {
 		t.Fatalf("Steps = %#v, unselected branch %q must not run", result.Steps, nodeApprove)
+	}
+	if contains(result.Steps, nodeArchiveApproved) {
+		t.Fatalf("Steps = %#v, approve-only node %q must not run", result.Steps, nodeArchiveApproved)
 	}
 }
 

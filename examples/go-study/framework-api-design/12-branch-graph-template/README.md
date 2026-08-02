@@ -18,6 +18,9 @@ START(ReviewRequest)
        v                             v
      approve                     manual_review
        |                             |
+       v                             |
+ archive_approved_review             |
+       |                             |
        +-------------> END <---------+
                    (ReviewResult)
 ```
@@ -52,11 +55,12 @@ compileDefinedGraph[ReviewRequest, ReviewResult](
 
 因此 Graph 对外始终接收 `ReviewRequest`，最终必须产出 `ReviewResult`。Branch 只改变中途执行哪个节点，不能在运行时修改 Graph 的输入、输出类型。
 
-两条路径的末端节点都是：
+两条路径最终连接到 `END` 时都是 `ReviewResult`：
 
 ```text
-approve:       reviewContext -> ReviewResult
-manual_review: reviewContext -> ReviewResult
+approve:                 reviewContext -> ReviewResult
+archive_approved_review: ReviewResult  -> ReviewResult -> END
+manual_review:           reviewContext -> ReviewResult -> END
 ```
 
 这保证无论选择哪条路径，连接到 `END` 的值都符合 Graph 的最终输出类型。
@@ -84,7 +88,43 @@ err := graph.AddBranch(nodeInspectRefundNotice, branch)
 | `routeReview` | 根据该节点的输出选择目标 key | 每次 Invoke 的运行期 |
 | `map[string]bool{...}` | 条件函数允许返回的目标节点白名单 | 注册期保存、运行期校验 |
 
-`routeReview` 返回 `approve` 时，Eino 才调用已注册的 `approveReview`；它本身不会直接调用这个 Handler。未选中的 `manual_review` 不会执行。
+`routeReview` 返回 `approve` 时，Eino 才调用已注册的 `approveReview`；它本身不会直接调用这个 Handler。执行完 `approve` 后，固定 Edge 再把结果交给 `archive_approved_review`。未选中的 `manual_review` 不会执行。
+
+## 在一个分支后增加普通节点
+
+本示例在 `approve` 后新增了 `archive_approved_review`。需要修改的只有 `defineReviewGraph` 和新增节点 Handler。
+
+第一步，注册节点：
+
+```go
+if err := addReviewNode(graph, nodeArchiveApproved, archiveApprovedReview); err != nil {
+    return err
+}
+```
+
+第二步，把原来的 `approve -> END` 改成两条 Edge：
+
+```go
+{nodeApprove, nodeArchiveApproved},
+{nodeArchiveApproved, compose.END},
+```
+
+新增节点是普通 Handler：
+
+```go
+func archiveApprovedReview(
+    ctx context.Context,
+    result ReviewResult,
+) (ReviewResult, error) {
+    if err := ctx.Err(); err != nil {
+        return ReviewResult{}, fmt.Errorf("归档通过结果: %w", err)
+    }
+    result.Steps = append(result.Steps, nodeArchiveApproved)
+    return result, nil
+}
+```
+
+Branch 的白名单和 `routeReview` 都不需要修改，因为 Branch 仍然只选择第一个目标 `approve`。`archive_approved_review` 是 `approve` 后面的普通节点，由固定 Edge 调度。
 
 ## 以后增加节点时改哪里
 
@@ -132,11 +172,11 @@ go test -race ./examples/go-study/framework-api-design/12-branch-graph-template 
 预期输出包含两条路径：
 
 ```text
-approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve] reasons=[包含退款到账说明]
+approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve archive_approved_review] reasons=[包含退款到账说明]
 approved=false route=manual_review score=5 steps=[normalize append_channel_notice inspect_refund_notice manual_review] reasons=[缺少退款到账说明]
 ```
 
-测试覆盖高分和低分路径、未选中分支不执行、业务错误、context 取消、条件函数错误传播、非法目标节点以及公共构建参数校验。
+测试覆盖高分和低分路径、通过分支归档节点、人工审核路径不执行归档节点、未选中分支不执行、业务错误、context 取消、条件函数错误传播、非法目标节点以及公共构建参数校验。
 
 ## 已验证边界
 
