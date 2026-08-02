@@ -60,6 +60,7 @@ func TestReviewGraphSelectsManualReviewBranch(t *testing.T) {
 		nodeAppendChannelNotice,
 		nodeInspectRefundNotice,
 		nodeManualReview,
+		nodeStandardManualQueue,
 	}
 	if !reflect.DeepEqual(result.Steps, wantSteps) {
 		t.Fatalf("Steps = %#v, want %#v", result.Steps, wantSteps)
@@ -69,6 +70,39 @@ func TestReviewGraphSelectsManualReviewBranch(t *testing.T) {
 	}
 	if contains(result.Steps, nodeArchiveApproved) {
 		t.Fatalf("Steps = %#v, approve-only node %q must not run", result.Steps, nodeArchiveApproved)
+	}
+	if contains(result.Steps, nodePriorityManualQueue) {
+		t.Fatalf("Steps = %#v, unselected queue %q must not run", result.Steps, nodePriorityManualQueue)
+	}
+}
+
+func TestReviewGraphSelectsPriorityManualQueueBranch(t *testing.T) {
+	runnable, err := NewReviewGraph(context.Background())
+	if err != nil {
+		t.Fatalf("NewReviewGraph() error = %v", err)
+	}
+
+	result, err := runnable.Invoke(context.Background(), ReviewRequest{
+		Content: "  您好，请查看相关说明。  ",
+	})
+	if err != nil {
+		t.Fatalf("Invoke() error = %v", err)
+	}
+	if result.Approved || result.Route != nodeManualReview || result.Score != 3 {
+		t.Fatalf("result = %#v, want priority manual queue with score 3", result)
+	}
+	wantSteps := []string{
+		nodeNormalize,
+		nodeAppendChannelNotice,
+		nodeInspectRefundNotice,
+		nodeManualReview,
+		nodePriorityManualQueue,
+	}
+	if !reflect.DeepEqual(result.Steps, wantSteps) {
+		t.Fatalf("Steps = %#v, want %#v", result.Steps, wantSteps)
+	}
+	if contains(result.Steps, nodeStandardManualQueue) {
+		t.Fatalf("Steps = %#v, unselected queue %q must not run", result.Steps, nodeStandardManualQueue)
 	}
 }
 

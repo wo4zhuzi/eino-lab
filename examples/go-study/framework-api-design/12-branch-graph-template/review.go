@@ -17,6 +17,8 @@ const (
 	nodeApprove             = "approve"
 	nodeArchiveApproved     = "archive_approved_review"
 	nodeManualReview        = "manual_review"
+	nodeStandardManualQueue = "standard_manual_queue"
+	nodePriorityManualQueue = "priority_manual_queue"
 )
 
 // ErrEmptyContent 表示规范化后的审核内容为空。
@@ -90,6 +92,12 @@ func defineReviewGraph(graph *compose.Graph[ReviewRequest, ReviewResult]) error 
 	if err := addReviewNode(graph, nodeManualReview, sendToManualReview); err != nil {
 		return err
 	}
+	if err := addReviewNode(graph, nodeStandardManualQueue, enqueueStandardManualReview); err != nil {
+		return err
+	}
+	if err := addReviewNode(graph, nodePriorityManualQueue, enqueuePriorityManualReview); err != nil {
+		return err
+	}
 
 	// -------------------- 注册分支前的固定 Edge --------------------
 	// 这些 Edge 表示无条件执行的线性部分。运行时会依次执行到 inspect_refund_notice。
@@ -108,29 +116,45 @@ func defineReviewGraph(graph *compose.Graph[ReviewRequest, ReviewResult]) error 
 	// -------------------- 注册 Branch --------------------
 	// routeReview 在运行期接收 inspect_refund_notice 的输出，只返回下一个节点的 key。
 	// endNodes 是白名单：条件函数只能选择 approve 或 manual_review。
-	branch := compose.NewGraphBranch(
+	reviewBranch := compose.NewGraphBranch(
 		routeReview,
 		map[string]bool{
 			nodeApprove:      true,
 			nodeManualReview: true,
 		},
 	)
-	if err := graph.AddBranch(nodeInspectRefundNotice, branch); err != nil {
+	if err := graph.AddBranch(nodeInspectRefundNotice, reviewBranch); err != nil {
 		return fmt.Errorf("在节点 %s 后添加审核分支: %w", nodeInspectRefundNotice, err)
 	}
 
+	// -------------------- 注册第二个 Branch --------------------
+	// 第一个 Branch 选择 approve 或 manual_review；只有选择 manual_review 后，
+	// 运行流程才会到达这里，并根据 ReviewResult.Score 再选择一个人工队列。
+	manualQueueBranch := compose.NewGraphBranch(
+		routeManualQueue,
+		map[string]bool{
+			nodeStandardManualQueue: true,
+			nodePriorityManualQueue: true,
+		},
+	)
+	if err := graph.AddBranch(nodeManualReview, manualQueueBranch); err != nil {
+		return fmt.Errorf("在节点 %s 后添加人工队列分支: %w", nodeManualReview, err)
+	}
+
 	// -------------------- 注册分支后的固定 Edge --------------------
-	// approve 路径比 manual_review 多执行一个归档节点：
+	// 两条 Branch 选中的节点仍需通过固定 Edge 连接后续节点或 END：
 	//
 	//	approve -> archive_approved_review -> END
-	//	manual_review -----------------------> END
+	//	manual_review -> standard_manual_queue -> END
+	//	              -> priority_manual_queue -> END
 	//
 	// AddBranch 只负责选择第一个目标节点，不会自动推导目标节点后面的路径，
 	// 所以这里仍然要显式连接每一条分支的后续 Edge。
 	branchEdges := [][2]string{
 		{nodeApprove, nodeArchiveApproved},
 		{nodeArchiveApproved, compose.END},
-		{nodeManualReview, compose.END},
+		{nodeStandardManualQueue, compose.END},
+		{nodePriorityManualQueue, compose.END},
 	}
 	for _, edge := range branchEdges {
 		if err := graph.AddEdge(edge[0], edge[1]); err != nil {
@@ -192,9 +216,12 @@ func inspectRefundNotice(ctx context.Context, current reviewContext) (reviewCont
 	if strings.Contains(current.content, "退款") && strings.Contains(current.content, "到账") {
 		current.score = 9
 		current.reasons = append(current.reasons, "包含退款到账说明")
-	} else {
+	} else if strings.Contains(current.content, "退款") {
 		current.score = 5
 		current.reasons = append(current.reasons, "缺少退款到账说明")
+	} else {
+		current.score = 3
+		current.reasons = append(current.reasons, "未包含退款说明")
 	}
 	current.steps = append(current.steps, nodeInspectRefundNotice)
 	return current, nil
@@ -240,6 +267,37 @@ func sendToManualReview(ctx context.Context, current reviewContext) (ReviewResul
 	}
 	current.steps = append(current.steps, nodeManualReview)
 	return newReviewResult(current, false, nodeManualReview), nil
+}
+
+// routeManualQueue 是第二个 Branch 的条件函数。
+//
+// 第一个 Branch 的起点 inspect_refund_notice 输出 reviewContext，所以 routeReview
+// 接收 reviewContext；第二个 Branch 的起点 manual_review 输出 ReviewResult，
+// 所以这里接收 ReviewResult。Branch 条件的输入类型由它的起点输出决定。
+func routeManualQueue(ctx context.Context, result ReviewResult) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("选择人工队列分支: %w", err)
+	}
+	if result.Score >= 5 {
+		return nodeStandardManualQueue, nil
+	}
+	return nodePriorityManualQueue, nil
+}
+
+func enqueueStandardManualReview(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("加入普通人工队列: %w", err)
+	}
+	result.Steps = append(result.Steps, nodeStandardManualQueue)
+	return result, nil
+}
+
+func enqueuePriorityManualReview(ctx context.Context, result ReviewResult) (ReviewResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("加入优先人工队列: %w", err)
+	}
+	result.Steps = append(result.Steps, nodePriorityManualQueue)
+	return result, nil
 }
 
 func newReviewResult(current reviewContext, approved bool, route string) ReviewResult {
