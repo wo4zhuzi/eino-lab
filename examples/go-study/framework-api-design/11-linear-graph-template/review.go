@@ -75,6 +75,17 @@ func reviewSteps() []linearStep[reviewContext] {
 			},
 		},
 		{
+			Key: "append_channel_notice",
+			Run: func(ctx context.Context, current reviewContext) (reviewContext, error) {
+				if err := ctx.Err(); err != nil {
+					return reviewContext{}, fmt.Errorf("追加渠道说明: %w", err)
+				}
+				current.content += " 请关注原支付渠道。"
+				current.steps = append(current.steps, "append_channel_notice")
+				return current, nil
+			},
+		},
+		{
 			Key: "inspect_refund_notice",
 			Run: func(ctx context.Context, current reviewContext) (reviewContext, error) {
 				if err := ctx.Err(); err != nil {

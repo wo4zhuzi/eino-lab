@@ -40,6 +40,7 @@ compileLinearGraph[I, M, O](...)
 START(ReviewRequest)
   -> input_adapter: ReviewRequest -> reviewContext
   -> normalize: reviewContext -> reviewContext
+  -> append_channel_notice: reviewContext -> reviewContext
   -> inspect_refund_notice: reviewContext -> reviewContext
   -> output_adapter: reviewContext -> ReviewResult
   -> END(ReviewResult)
@@ -63,9 +64,9 @@ START(ReviewRequest)
 
 ## 唯一经常修改的中间方法
 
-[`review.go`](review.go) 中的 `reviewSteps()` 同时声明节点行为和顺序。当前注册表依次包含 `normalize` 和 `inspect_refund_notice`，两个 Handler 的完整实现都直接写在该方法内。
+[`review.go`](review.go) 中的 `reviewSteps()` 同时声明节点行为和顺序。当前注册表依次包含 `normalize`、`append_channel_notice` 和 `inspect_refund_notice`，三个 Handler 的完整实现都直接写在该方法内。
 
-本示例为了让“只改一个方法”可直接观察，把 Handler 函数体内联在 `reviewSteps()` 中。新增一个线性节点时，只在切片中插入一项：
+本示例为了让“只改一个方法”可直接观察，把 Handler 函数体内联在 `reviewSteps()` 中。本次实际新增的线性节点只是在切片中插入下面一项：
 
 ```go
 {
@@ -81,7 +82,7 @@ START(ReviewRequest)
 },
 ```
 
-公共构建器会自动得到新拓扑：
+公共构建器自动得到新拓扑，`builder.go`、`NewReviewGraph` 和 `main.go` 均未修改：
 
 ```text
 normalize -> append_channel_notice -> inspect_refund_notice
@@ -104,7 +105,7 @@ go test -race ./examples/go-study/framework-api-design/11-linear-graph-template 
 预期输出：
 
 ```text
-approved=true score=9 content="您好，退款将在 3 个工作日到账。" steps=[normalize inspect_refund_notice] reasons=[包含退款到账说明]
+approved=true score=9 content="您好，退款将在 3 个工作日到账。 请关注原支付渠道。" steps=[normalize append_channel_notice inspect_refund_notice] reasons=[包含退款到账说明]
 ```
 
 测试覆盖正常路径、步骤顺序、零中间节点、业务错误、context 取消、步骤注册表扩展，以及空名称、重复 key、保留 key、nil Handler 和 nil Option。

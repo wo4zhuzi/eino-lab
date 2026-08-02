@@ -25,10 +25,10 @@ func TestReviewGraphRunsStepsInRegistryOrder(t *testing.T) {
 	if !result.Approved || result.Score != 9 {
 		t.Fatalf("result = %#v, want approved with score 9", result)
 	}
-	if result.Content != "您好，退款将在 3 个工作日到账。" {
+	if result.Content != "您好，退款将在 3 个工作日到账。 请关注原支付渠道。" {
 		t.Fatalf("Content = %q", result.Content)
 	}
-	wantSteps := []string{"normalize", "inspect_refund_notice"}
+	wantSteps := []string{"normalize", "append_channel_notice", "inspect_refund_notice"}
 	if !reflect.DeepEqual(result.Steps, wantSteps) {
 		t.Fatalf("Steps = %#v, want %#v", result.Steps, wantSteps)
 	}
