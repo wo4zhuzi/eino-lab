@@ -43,32 +43,73 @@ pipeline.
     AppendLambda(compose.InvokableLambda(attachLocalAudit), compose.WithNodeKey(nodeAttachLocalAudit))
 ```
 
-完整业务拓扑：
+完整业务拓扑如下。实线表示业务数据流，虚线表示 Local State 的创建、写入和读取：
 
-```text
-START(ReviewRequest)
-  -> input_adapter
-  -> normalize
-  -> append_channel_notice
-  -> inspect_refund_notice
-       |
-       | Branch 1
-       ├── approve path
-       |     -> approve
-       |     -> archive_approved_review
-       |     -> ReviewResult
-       |
-       └── manual_review path
-             -> manual_review
-             -> Branch 2
-                  ├── standard_manual_queue -> ReviewResult
-                  └── priority_manual_queue -> ReviewResult
+```mermaid
+flowchart TD
+    START([START<br/>ReviewRequest])
+    INPUT[input_adapter]
+    NORMALIZE[normalize]
+    NOTICE[append_channel_notice]
+    INSPECT[inspect_refund_notice<br/>输出 reviewContext]
 
-审核路径汇聚为 ReviewResult
-  -> record_review_result
-  -> Branch 3
-       ├── send_approved_notice ------\
-       └── send_manual_review_notice --+-> attach_local_audit -> END
+    REVIEW_BRANCH{审核 Branch<br/>routeReview}
+
+    subgraph APPROVE_PATH[审核通过子 Chain]
+        APPROVE[approve<br/>reviewContext -> ReviewResult]
+        ARCHIVE[archive_approved_review]
+        APPROVE --> ARCHIVE
+    end
+
+    subgraph MANUAL_PATH[人工审核子 Chain]
+        MANUAL[manual_review<br/>reviewContext -> ReviewResult]
+        QUEUE_BRANCH{人工队列 Branch<br/>routeManualQueue}
+        STANDARD[standard_manual_queue]
+        PRIORITY[priority_manual_queue]
+
+        MANUAL --> QUEUE_BRANCH
+        QUEUE_BRANCH -->|score >= 5| STANDARD
+        QUEUE_BRANCH -->|score < 5| PRIORITY
+    end
+
+    RECORD[record_review_result<br/>公共节点]
+    NOTIFY_BRANCH{通知 Branch<br/>routeNotification}
+    APPROVED_NOTICE[send_approved_notice]
+    MANUAL_NOTICE[send_manual_review_notice]
+    ATTACH[attach_local_audit<br/>读取并复制 Audit]
+    END_NODE([END<br/>ReviewResult])
+
+    START --> INPUT
+    INPUT --> NORMALIZE
+    NORMALIZE --> NOTICE
+    NOTICE --> INSPECT
+    INSPECT --> REVIEW_BRANCH
+
+    REVIEW_BRANCH -->|score >= 8| APPROVE
+    REVIEW_BRANCH -->|score < 8| MANUAL
+
+    ARCHIVE --> RECORD
+    STANDARD --> RECORD
+    PRIORITY --> RECORD
+
+    RECORD --> NOTIFY_BRANCH
+    NOTIFY_BRANCH -->|Approved = true| APPROVED_NOTICE
+    NOTIFY_BRANCH -->|Approved = false| MANUAL_NOTICE
+
+    APPROVED_NOTICE --> ATTACH
+    MANUAL_NOTICE --> ATTACH
+    ATTACH --> END_NODE
+
+    STATE_FACTORY[WithGenLocalState<br/>每次 Invoke 创建新状态]
+    LOCAL_STATE[(reviewLocalState<br/>audit)]
+
+    STATE_FACTORY -.创建.-> LOCAL_STATE
+    INPUT -.request_received.-> LOCAL_STATE
+    REVIEW_BRANCH -.审核分支选择.-> LOCAL_STATE
+    QUEUE_BRANCH -.人工队列选择.-> LOCAL_STATE
+    RECORD -.review_result_recorded.-> LOCAL_STATE
+    NOTIFY_BRANCH -.通知分支选择.-> LOCAL_STATE
+    LOCAL_STATE -.ProcessState 读取.-> ATTACH
 ```
 
 ## Local State 如何传递
