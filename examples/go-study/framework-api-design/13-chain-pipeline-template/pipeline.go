@@ -18,7 +18,11 @@ func NewReviewPipeline(ctx context.Context) (compose.Runnable[ReviewRequest, Rev
 
 	// 主流水线只描述公共步骤，阅读顺序就是运行顺序。
 	// AppendBranch 到达时，再进入 newReviewBranch 声明的某一条子路径。
-	pipeline := compose.NewChain[ReviewRequest, ReviewResult]()
+	// WithGenLocalState 不会在 Compile 时创建共享对象，而是在每次 Invoke 开始时
+	// 调用 newReviewLocalState，为这一次运行创建独立状态。
+	pipeline := compose.NewChain[ReviewRequest, ReviewResult](
+		compose.WithGenLocalState(newReviewLocalState),
+	)
 	pipeline.
 		AppendLambda(compose.InvokableLambda(requestToReviewContext), compose.WithNodeKey(nodeInputAdapter)).
 		AppendLambda(compose.InvokableLambda(normalizeReview), compose.WithNodeKey(nodeNormalize)).
@@ -26,7 +30,8 @@ func NewReviewPipeline(ctx context.Context) (compose.Runnable[ReviewRequest, Rev
 		AppendLambda(compose.InvokableLambda(inspectRefundNotice), compose.WithNodeKey(nodeInspectRefundNotice)).
 		AppendBranch(newReviewBranch()).
 		AppendLambda(compose.InvokableLambda(recordReviewResult), compose.WithNodeKey(nodeRecordReviewResult)).
-		AppendBranch(newNotificationBranch())
+		AppendBranch(newNotificationBranch()).
+		AppendLambda(compose.InvokableLambda(attachLocalAudit), compose.WithNodeKey(nodeAttachLocalAudit))
 
 	runnable, err := pipeline.Compile(ctx, compose.WithGraphName("review_pipeline"))
 	if err != nil {

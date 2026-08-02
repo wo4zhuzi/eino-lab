@@ -10,6 +10,9 @@ func requestToReviewContext(ctx context.Context, request ReviewRequest) (reviewC
 	if err := ctx.Err(); err != nil {
 		return reviewContext{}, fmt.Errorf("转换审核请求: %w", err)
 	}
+	if err := appendLocalAudit(ctx, "request_received"); err != nil {
+		return reviewContext{}, fmt.Errorf("记录请求审计: %w", err)
+	}
 	return reviewContext{content: request.Content}, nil
 }
 
@@ -98,6 +101,9 @@ func enqueuePriorityManualReview(ctx context.Context, result ReviewResult) (Revi
 func recordReviewResult(ctx context.Context, result ReviewResult) (ReviewResult, error) {
 	if err := ctx.Err(); err != nil {
 		return ReviewResult{}, fmt.Errorf("记录审核结果: %w", err)
+	}
+	if err := appendLocalAudit(ctx, "review_result_recorded"); err != nil {
+		return ReviewResult{}, fmt.Errorf("记录审核结果审计: %w", err)
 	}
 	result.Steps = append(result.Steps, nodeRecordReviewResult)
 	return result, nil

@@ -15,6 +15,7 @@ const (
 	nodeRecordReviewResult  = "record_review_result"
 	nodeSendApprovedNotice  = "send_approved_notice"
 	nodeSendManualNotice    = "send_manual_review_notice"
+	nodeAttachLocalAudit    = "attach_local_audit"
 )
 
 var (
@@ -37,6 +38,7 @@ type ReviewResult struct {
 	Score    int
 	Reasons  []string
 	Steps    []string
+	Audit    []string
 }
 
 // reviewContext 只在流水线前半段的审核节点之间传递。

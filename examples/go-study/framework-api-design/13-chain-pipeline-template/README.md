@@ -15,6 +15,7 @@ Demo 12 直接使用 Graph API，适合学习底层拓扑；Demo 13 表达相同
 | [`pipeline.go`](pipeline.go) | 顶层流水线的步骤顺序 |
 | [`review_branch.go`](review_branch.go) | 审核分支、通过路径、人工路径和队列分支 |
 | [`notification_branch.go`](notification_branch.go) | 审核结果记录后的通知分支 |
+| [`local_state.go`](local_state.go) | 单次运行审计状态、并发安全访问和最终读取 |
 | [`nodes.go`](nodes.go) | 每个节点的业务逻辑 |
 | [`routes.go`](routes.go) | 三个 Branch 的条件判断 |
 | [`domain.go`](domain.go) | 输入、输出、内部数据和节点名称 |
@@ -28,7 +29,9 @@ Demo 12 直接使用 Graph API，适合学习底层拓扑；Demo 13 表达相同
 主流程按照代码书写顺序运行：
 
 ```go
-pipeline := compose.NewChain[ReviewRequest, ReviewResult]()
+pipeline := compose.NewChain[ReviewRequest, ReviewResult](
+    compose.WithGenLocalState(newReviewLocalState),
+)
 pipeline.
     AppendLambda(compose.InvokableLambda(requestToReviewContext), compose.WithNodeKey(nodeInputAdapter)).
     AppendLambda(compose.InvokableLambda(normalizeReview), compose.WithNodeKey(nodeNormalize)).
@@ -36,7 +39,8 @@ pipeline.
     AppendLambda(compose.InvokableLambda(inspectRefundNotice), compose.WithNodeKey(nodeInspectRefundNotice)).
     AppendBranch(newReviewBranch()).
     AppendLambda(compose.InvokableLambda(recordReviewResult), compose.WithNodeKey(nodeRecordReviewResult)).
-    AppendBranch(newNotificationBranch())
+    AppendBranch(newNotificationBranch()).
+    AppendLambda(compose.InvokableLambda(attachLocalAudit), compose.WithNodeKey(nodeAttachLocalAudit))
 ```
 
 完整业务拓扑：
@@ -63,8 +67,86 @@ START(ReviewRequest)
 审核路径汇聚为 ReviewResult
   -> record_review_result
   -> Branch 3
-       ├── send_approved_notice -> END
-       └── send_manual_review_notice -> END
+       ├── send_approved_notice ------\
+       └── send_manual_review_notice --+-> attach_local_audit -> END
+```
+
+## Local State 如何传递
+
+最外层 Chain 注册状态工厂：
+
+```go
+pipeline := compose.NewChain[ReviewRequest, ReviewResult](
+    compose.WithGenLocalState(newReviewLocalState),
+)
+```
+
+Eino 在每次 `Invoke` 开始时调用一次工厂：
+
+```go
+type reviewLocalState struct {
+    audit []string
+}
+
+func newReviewLocalState(context.Context) *reviewLocalState {
+    return &reviewLocalState{}
+}
+```
+
+因此同一个 Runnable 并发处理两个请求时，会得到两个不同的 `reviewLocalState`，不是共享全局对象。
+
+节点和 Branch 条件使用 `ProcessState` 访问当前运行状态：
+
+```go
+func appendLocalAudit(ctx context.Context, event string) error {
+    return compose.ProcessState[*reviewLocalState](
+        ctx,
+        func(_ context.Context, state *reviewLocalState) error {
+            state.audit = append(state.audit, event)
+            return nil
+        },
+    )
+}
+```
+
+`ProcessState` 的已验证行为：
+
+- 当前子 Chain 没有同类型状态时，会继续查找父 Chain 的状态。
+- 审核子 Chain、嵌套人工队列 Branch 和通知 Branch 因此能访问最外层创建的状态。
+- Eino 在回调执行期间自动持有该状态的互斥锁。
+- 内层如果定义同类型状态，会遮蔽父级同类型状态；本示例没有定义内层状态。
+
+最终节点读取状态并复制到结果：
+
+```go
+func attachLocalAudit(
+    ctx context.Context,
+    result ReviewResult,
+) (ReviewResult, error) {
+    err := compose.ProcessState[*reviewLocalState](
+        ctx,
+        func(_ context.Context, state *reviewLocalState) error {
+            state.audit = append(state.audit, "pipeline_completed")
+            result.Audit = append([]string(nil), state.audit...)
+            return nil
+        },
+    )
+    return result, err
+}
+```
+
+### 两种数据通道
+
+本示例没有用 Local State 替代节点输入输出：
+
+| 数据 | 传递方式 | 原因 |
+|---|---|---|
+| `content`、`score`、`ReviewResult` | Handler 参数和返回值 | 属于后续节点明确依赖的主业务数据 |
+| Branch 决策和运行审计 | `reviewLocalState` | 属于跨节点旁路信息，不应污染每个 Handler 的输入输出类型 |
+
+```text
+显式数据流：ReviewRequest -> reviewContext -> ReviewResult
+Local State：request_received -> Branch 决策 -> recorded -> completed
 ```
 
 ## Branch 后接 Node，再接 Branch
@@ -200,9 +282,9 @@ go test -race ./examples/go-study/framework-api-design/13-chain-pipeline-templat
 预期输出：
 
 ```text
-approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve archive_approved_review record_review_result send_approved_notice] reasons=[包含退款到账说明]
-approved=false route=manual_review score=5 steps=[normalize append_channel_notice inspect_refund_notice manual_review standard_manual_queue record_review_result send_manual_review_notice] reasons=[缺少退款到账说明]
-approved=false route=manual_review score=3 steps=[normalize append_channel_notice inspect_refund_notice manual_review priority_manual_queue record_review_result send_manual_review_notice] reasons=[未包含退款说明]
+approved=true route=approve score=9 steps=[normalize append_channel_notice inspect_refund_notice approve archive_approved_review record_review_result send_approved_notice attach_local_audit] reasons=[包含退款到账说明] audit=[request_received review_branch=approve review_result_recorded notification_branch=send_approved_notice pipeline_completed]
+approved=false route=manual_review score=5 steps=[normalize append_channel_notice inspect_refund_notice manual_review standard_manual_queue record_review_result send_manual_review_notice attach_local_audit] reasons=[缺少退款到账说明] audit=[request_received review_branch=manual_review manual_queue_branch=standard_manual_queue review_result_recorded notification_branch=send_manual_review_notice pipeline_completed]
+approved=false route=manual_review score=3 steps=[normalize append_channel_notice inspect_refund_notice manual_review priority_manual_queue record_review_result send_manual_review_notice attach_local_audit] reasons=[未包含退款说明] audit=[request_received review_branch=manual_review manual_queue_branch=priority_manual_queue review_result_recorded notification_branch=send_manual_review_notice pipeline_completed]
 ```
 
-测试覆盖审核、人工队列和通知三个 Branch 的路径互斥、Branch 后公共节点、业务错误、nil context、context 取消和三个路由条件的取消传播。
+测试覆盖审核、人工队列和通知三个 Branch 的路径互斥、Branch 后公共节点、Local State 审计顺序、同一 Runnable 并发 Invoke 的状态隔离、业务错误、nil context、context 取消和三个路由条件的取消传播。

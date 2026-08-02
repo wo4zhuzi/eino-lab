@@ -19,6 +19,7 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 		approved  bool
 		score     int
 		wantSteps []string
+		wantAudit []string
 	}{
 		{
 			name:     "approve path",
@@ -33,6 +34,14 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodeArchiveApproved,
 				nodeRecordReviewResult,
 				nodeSendApprovedNotice,
+				nodeAttachLocalAudit,
+			},
+			wantAudit: []string{
+				"request_received",
+				"review_branch=" + nodeApprove,
+				"review_result_recorded",
+				"notification_branch=" + nodeSendApprovedNotice,
+				"pipeline_completed",
 			},
 		},
 		{
@@ -47,6 +56,15 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodeStandardManualQueue,
 				nodeRecordReviewResult,
 				nodeSendManualNotice,
+				nodeAttachLocalAudit,
+			},
+			wantAudit: []string{
+				"request_received",
+				"review_branch=" + nodeManualReview,
+				"manual_queue_branch=" + nodeStandardManualQueue,
+				"review_result_recorded",
+				"notification_branch=" + nodeSendManualNotice,
+				"pipeline_completed",
 			},
 		},
 		{
@@ -61,6 +79,15 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 				nodePriorityManualQueue,
 				nodeRecordReviewResult,
 				nodeSendManualNotice,
+				nodeAttachLocalAudit,
+			},
+			wantAudit: []string{
+				"request_received",
+				"review_branch=" + nodeManualReview,
+				"manual_queue_branch=" + nodePriorityManualQueue,
+				"review_result_recorded",
+				"notification_branch=" + nodeSendManualNotice,
+				"pipeline_completed",
 			},
 		},
 	}
@@ -77,7 +104,75 @@ func TestReviewPipelineRunsOnlySelectedPath(t *testing.T) {
 			if !reflect.DeepEqual(result.Steps, test.wantSteps) {
 				t.Fatalf("Steps = %#v, want %#v", result.Steps, test.wantSteps)
 			}
+			if !reflect.DeepEqual(result.Audit, test.wantAudit) {
+				t.Fatalf("Audit = %#v, want %#v", result.Audit, test.wantAudit)
+			}
 		})
+	}
+}
+
+func TestReviewPipelineLocalStateIsIsolatedAcrossConcurrentInvokes(t *testing.T) {
+	runnable, err := NewReviewPipeline(context.Background())
+	if err != nil {
+		t.Fatalf("NewReviewPipeline() error = %v", err)
+	}
+
+	type invokeResult struct {
+		name  string
+		audit []string
+		err   error
+	}
+	tests := []struct {
+		name      string
+		content   string
+		wantAudit []string
+	}{
+		{
+			name:    "approve",
+			content: "退款将在 3 个工作日到账。",
+			wantAudit: []string{
+				"request_received",
+				"review_branch=" + nodeApprove,
+				"review_result_recorded",
+				"notification_branch=" + nodeSendApprovedNotice,
+				"pipeline_completed",
+			},
+		},
+		{
+			name:    "priority manual",
+			content: "请查看相关说明。",
+			wantAudit: []string{
+				"request_received",
+				"review_branch=" + nodeManualReview,
+				"manual_queue_branch=" + nodePriorityManualQueue,
+				"review_result_recorded",
+				"notification_branch=" + nodeSendManualNotice,
+				"pipeline_completed",
+			},
+		},
+	}
+
+	results := make(chan invokeResult, len(tests))
+	for _, test := range tests {
+		test := test
+		go func() {
+			result, err := runnable.Invoke(context.Background(), ReviewRequest{Content: test.content})
+			results <- invokeResult{name: test.name, audit: result.Audit, err: err}
+		}()
+	}
+
+	wantByName := make(map[string][]string, len(tests))
+	for _, test := range tests {
+		wantByName[test.name] = test.wantAudit
+	}
+	for range tests {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("%s Invoke() error = %v", result.name, result.err)
+		}
+		if !reflect.DeepEqual(result.audit, wantByName[result.name]) {
+			t.Fatalf("%s Audit = %#v, want %#v", result.name, result.audit, wantByName[result.name])
+		}
 	}
 }
 

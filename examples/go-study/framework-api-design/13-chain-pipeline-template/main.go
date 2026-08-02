@@ -22,12 +22,13 @@ func main() {
 			panic(err)
 		}
 		fmt.Printf(
-			"approved=%t route=%s score=%d steps=%v reasons=%v\n",
+			"approved=%t route=%s score=%d steps=%v reasons=%v audit=%v\n",
 			result.Approved,
 			result.Route,
 			result.Score,
 			result.Steps,
 			result.Reasons,
+			result.Audit,
 		)
 	}
 }
