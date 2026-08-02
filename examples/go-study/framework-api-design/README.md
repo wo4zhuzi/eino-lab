@@ -250,6 +250,8 @@ Go 公共库设计
 
 学习目标：沿一条真实运行链路找到配置注册、编译、运行、回调和错误传播位置。
 
+可运行示例：[10-framework-source-design](10-framework-source-design/README.md)。
+
 阅读框架源码时固定追踪：
 
 ```text

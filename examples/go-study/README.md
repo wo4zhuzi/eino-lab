@@ -16,4 +16,5 @@
 - [框架 API 设计 07：生命周期钩子](framework-api-design/07-lifecycle-hooks/README.md)：验证 Before、After、Error 三个固定执行时点及错误传播规则。
 - [框架 API 设计 08：Go 中间件设计](framework-api-design/08-middleware/README.md)：理解中间件包装 Handler、洋葱执行顺序、短路和错误传播。
 - [框架 API 设计 09：Go SDK API 设计](framework-api-design/09-sdk-api-design/README.md)：组合必填参数、Functional Options、接口依赖、完成回调、context 与错误链，设计最小节点 SDK。
+- [框架 API 设计 10：Go 框架源码设计](framework-api-design/10-framework-source-design/README.md)：沿 Eino `WithStatePostHandler` 的注册、校验、编译、运行和错误传播链路阅读真实源码。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。
