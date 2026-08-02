@@ -15,9 +15,10 @@ Go 函数类型
   -> 框架源码设计
   -> 可复用线性 Graph 构建模板
   -> 带 Branch 的 Graph 构建模板
+  -> 使用 Chain 编写流水式 Graph
 ```
 
-这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后四项是综合与工程应用。
+这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后五项是综合与工程应用。
 
 ## 第一阶段：函数可以被保存和传递
 
@@ -293,6 +294,16 @@ Gin middleware 源码
 
 通过标准：能说明 `AddBranch` 的起点、条件函数和目标白名单分别负责什么，并能新增一个分支目标而不修改公共编译方法。
 
+### 13. 使用 Chain 编写流水式 Graph
+
+组合知识：Chain Builder、Lambda、子 Chain、嵌套 Branch 和 Graph/Chain 选型。
+
+学习目标：把以顺序步骤为主的业务组织成按代码书写顺序执行的流水线，通过命名子 Chain 隔离每条分支，不再手工维护节点表和 Edge 表。
+
+可运行示例：[13-chain-pipeline-template](13-chain-pipeline-template/README.md)。
+
+通过标准：新增普通节点时，只在对应路径追加一个 `AppendLambda`；新增 Branch 时，只声明条件、目标路径和插入位置。
+
 ## 主题之间的关系
 
 | 后续主题 | 依赖的前置知识 |
@@ -308,6 +319,7 @@ Gin middleware 源码
 | 框架源码设计 | 上述全部内容 |
 | 线性 Graph 构建模板 | 泛型、函数作为参数、SDK API 设计、Graph 源码设计 |
 | Branch Graph 构建模板 | 线性 Graph、声明式拓扑、条件函数、运行期调度 |
+| Chain 流水式 Graph | Branch Graph、Builder、子流程和 Graph/Chain 选型 |
 
 ## 推荐练习顺序
 
@@ -325,5 +337,6 @@ Gin middleware 源码
 10. 回到 Eino，追踪 `WithStatePostHandler` 的注册和运行链路。
 11. 把线性 Graph 的固定构建流程与可变业务步骤清单分离。
 12. 把固定 Edge 与 Branch 分开注册，观察两次 Invoke 选择不同目标节点。
+13. 使用 Chain 重写同一流程，对比手工 Edge 与流水式 Builder 的维护成本。
 
 不要同时学习多个主题。每一步都回答：函数在哪里定义、在哪里保存、在哪里调用、由谁传入参数。
