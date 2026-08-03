@@ -16,9 +16,10 @@ Go 函数类型
   -> 可复用线性 Graph 构建模板
   -> 带 Branch 的 Graph 构建模板
   -> 使用 Chain 编写流水式 Graph
+  -> 在 Chain 中嵌入循环 Graph
 ```
 
-这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后五项是综合与工程应用。
+这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后六项是综合与工程应用。
 
 ## 第一阶段：函数可以被保存和传递
 
@@ -304,6 +305,16 @@ Gin middleware 源码
 
 通过标准：新增普通节点时，只在对应路径追加一个 `AppendLambda`；新增 Branch 时，只声明条件、目标路径和插入位置。
 
+### 14. 在 Chain 中嵌入 Graph
+
+组合知识：Chain Builder、Graph 任意连边、Branch、循环保护和组合节点的类型边界。
+
+学习目标：用外层 Chain 表达固定阶段，把需要回环的局部决策封装为子 Graph，并通过 `AppendGraph` 连接两者。
+
+可运行示例：[14-chain-with-graph](14-chain-with-graph/README.md)。
+
+通过标准：能说明为什么顶层线性步骤使用 Chain、局部回环使用 Graph，并能指出 `reviewDraft -> reviewDecision` 的组合边界。
+
 ## 主题之间的关系
 
 | 后续主题 | 依赖的前置知识 |
@@ -320,6 +331,7 @@ Gin middleware 源码
 | 线性 Graph 构建模板 | 泛型、函数作为参数、SDK API 设计、Graph 源码设计 |
 | Branch Graph 构建模板 | 线性 Graph、声明式拓扑、条件函数、运行期调度 |
 | Chain 流水式 Graph | Branch Graph、Builder、子流程和 Graph/Chain 选型 |
+| Chain 嵌入 Graph | Chain、Graph 任意连边、Branch、循环保护、组合边界 |
 
 ## 推荐练习顺序
 
@@ -338,5 +350,6 @@ Gin middleware 源码
 11. 把线性 Graph 的固定构建流程与可变业务步骤清单分离。
 12. 把固定 Edge 与 Branch 分开注册，观察两次 Invoke 选择不同目标节点。
 13. 使用 Chain 重写同一流程，对比手工 Edge 与流水式 Builder 的维护成本。
+14. 把一个需要回环的局部流程封装为 Graph，再通过 `AppendGraph` 放入外层 Chain。
 
 不要同时学习多个主题。每一步都回答：函数在哪里定义、在哪里保存、在哪里调用、由谁传入参数。

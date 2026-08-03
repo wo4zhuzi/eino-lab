@@ -20,4 +20,5 @@
 - [框架 API 设计 11：可复用线性 Graph 构建模板](framework-api-design/11-linear-graph-template/README.md)：把创建、注册、连边和编译固定为公共构建器，业务只维护有序中间步骤。
 - [框架 API 设计 12：带 Branch 的 Graph 构建模板](framework-api-design/12-branch-graph-template/README.md)：显式声明固定 Edge 和条件分支，理解 Branch 的注册、编译和运行时选择过程。
 - [框架 API 设计 13：使用 Chain 编写流水式 Graph](framework-api-design/13-chain-pipeline-template/README.md)：用官方 Chain 把顺序节点和嵌套 Branch 组织成可按书写顺序阅读的业务流水线。
+- [框架 API 设计 14：在 Chain 中嵌入 Graph](framework-api-design/14-chain-with-graph/README.md)：外层使用 Chain 表达固定步骤，内层使用 Graph 表达检查、修订和重新检查的回环。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。
