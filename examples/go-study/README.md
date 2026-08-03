@@ -21,4 +21,5 @@
 - [框架 API 设计 12：带 Branch 的 Graph 构建模板](framework-api-design/12-branch-graph-template/README.md)：显式声明固定 Edge 和条件分支，理解 Branch 的注册、编译和运行时选择过程。
 - [框架 API 设计 13：使用 Chain 编写流水式 Graph](framework-api-design/13-chain-pipeline-template/README.md)：用官方 Chain 把顺序节点和嵌套 Branch 组织成可按书写顺序阅读的业务流水线。
 - [框架 API 设计 14：生产型 Chain 与 Graph 组合](framework-api-design/14-chain-with-graph/README.md)：通过 Workflow 门面、配置和依赖注入隔离应用与 Eino，外层使用 Chain，内层使用循环 Graph。
+- [框架 API 设计 15：多工作流与公共运行层](framework-api-design/15-multiple-workflows/README.md)：在同一应用中运行审核与 RAG 两个独立工作流，只共享编译、运行和依赖校验能力。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。

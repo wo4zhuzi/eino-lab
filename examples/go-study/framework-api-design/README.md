@@ -17,9 +17,10 @@ Go 函数类型
   -> 带 Branch 的 Graph 构建模板
   -> 使用 Chain 编写流水式 Graph
   -> 生产型 Chain 与 Graph 组合
+  -> 多工作流与公共运行层
 ```
 
-这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后六项是综合与工程应用。
+这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后七项是综合与工程应用。
 
 ## 第一阶段：函数可以被保存和传递
 
@@ -315,6 +316,16 @@ Gin middleware 源码
 
 通过标准：新增普通节点时只修改 Handler 和外层拓扑，新增复杂流程时只增加独立子 Graph；应用调用入口不依赖 Eino API。
 
+### 15. 多工作流与公共运行层
+
+组合知识：泛型接口、Compile/Invoke 生命周期、多个业务 Workflow、依赖注入和最小公共抽取。
+
+学习目标：在一个应用中启动审核与 RAG 两个独立工作流，只共享与业务无关的编译和运行生命周期，不抽象节点 DSL。
+
+可运行示例：[15-multiple-workflows](15-multiple-workflows/README.md)。
+
+通过标准：新增第三个工作流时复用 `workflowkit.Compile/Runner`，但保留自己的 Config、Dependencies、输入输出和拓扑。
+
 ## 主题之间的关系
 
 | 后续主题 | 依赖的前置知识 |
@@ -332,6 +343,7 @@ Gin middleware 源码
 | Branch Graph 构建模板 | 线性 Graph、声明式拓扑、条件函数、运行期调度 |
 | Chain 流水式 Graph | Branch Graph、Builder、子流程和 Graph/Chain 选型 |
 | 生产型 Chain 与 Graph 组合 | Chain、Graph 任意连边、依赖注入、配置校验、循环保护、组合边界 |
+| 多工作流与公共运行层 | 生产型工作流、泛型、Compile/Invoke 生命周期、最小公共抽取 |
 
 ## 推荐练习顺序
 
@@ -351,5 +363,6 @@ Gin middleware 源码
 12. 把固定 Edge 与 Branch 分开注册，观察两次 Invoke 选择不同目标节点。
 13. 使用 Chain 重写同一流程，对比手工 Edge 与流水式 Builder 的维护成本。
 14. 用 Workflow 门面封装 Eino，把一个需要回环的局部流程作为 Graph 放入外层 Chain，并注入可替换依赖。
+15. 同时实现审核和 RAG 工作流，仅抽取两者重复的编译与运行生命周期。
 
 不要同时学习多个主题。每一步都回答：函数在哪里定义、在哪里保存、在哪里调用、由谁传入参数。
