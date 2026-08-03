@@ -51,7 +51,7 @@ func New(ctx context.Context, config Config, dependencies Dependencies) (*Workfl
 	if err != nil {
 		return nil, fmt.Errorf("构建审核拓扑: %w", err)
 	}
-	runner, err := workflowkit.Compile(ctx, "content_review", definition)
+	runner, err := workflowkit.Compile[Request, Result](ctx, "content_review", definition)
 	if err != nil {
 		return nil, err
 	}
