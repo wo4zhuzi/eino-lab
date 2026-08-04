@@ -18,9 +18,10 @@ Go 函数类型
   -> 使用 Chain 编写流水式 Graph
   -> 生产型 Chain 与 Graph 组合
   -> 多工作流与公共运行层
+  -> 可治理的多工作流运行层
 ```
 
-这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后七项是综合与工程应用。
+这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后八项是综合与工程应用。
 
 ## 第一阶段：函数可以被保存和传递
 
@@ -326,6 +327,16 @@ Gin middleware 源码
 
 通过标准：新增第三个工作流时复用 `workflowkit.Compile/Runner`，但保留自己的 Config、Dependencies、输入输出和拓扑。
 
+### 16. 可治理的多工作流运行层
+
+组合知识：多工作流公共运行层、Functional Options、Callback、稳定身份、结构化错误、并发观测和运行级保护。
+
+学习目标：在不抽象业务拓扑 DSL 的前提下，为公共运行层增加工作流版本、RunID、Observer、节点名称、结构化错误和请求级最大步数。
+
+可运行示例：[16-governable-workflow-runtime](16-governable-workflow-runtime/README.md)。
+
+通过标准：每次执行都有稳定工作流身份和 RunID；Observer 能识别关键节点；运行错误可读取治理上下文并通过 `errors.Is` 找回原始错误。
+
 ## 主题之间的关系
 
 | 后续主题 | 依赖的前置知识 |
@@ -344,6 +355,7 @@ Gin middleware 源码
 | Chain 流水式 Graph | Branch Graph、Builder、子流程和 Graph/Chain 选型 |
 | 生产型 Chain 与 Graph 组合 | Chain、Graph 任意连边、依赖注入、配置校验、循环保护、组合边界 |
 | 多工作流与公共运行层 | 生产型工作流、泛型、Compile/Invoke 生命周期、最小公共抽取 |
+| 可治理的多工作流运行层 | 多工作流公共层、Functional Options、Callback、错误链、并发安全 |
 
 ## 推荐练习顺序
 
@@ -364,5 +376,6 @@ Gin middleware 源码
 13. 使用 Chain 重写同一流程，对比手工 Edge 与流水式 Builder 的维护成本。
 14. 用 Workflow 门面封装 Eino，把一个需要回环的局部流程作为 Graph 放入外层 Chain，并注入可替换依赖。
 15. 同时实现审核和 RAG 工作流，仅抽取两者重复的编译与运行生命周期。
+16. 为公共运行层增加版本、RunID、Observer、结构化错误和请求级运行保护。
 
 不要同时学习多个主题。每一步都回答：函数在哪里定义、在哪里保存、在哪里调用、由谁传入参数。
