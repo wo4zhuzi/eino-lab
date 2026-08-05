@@ -23,4 +23,5 @@
 - [框架 API 设计 14：生产型 Chain 与 Graph 组合](framework-api-design/14-chain-with-graph/README.md)：通过 Workflow 门面、配置和依赖注入隔离应用与 Eino，外层使用 Chain，内层使用循环 Graph。
 - [框架 API 设计 15：多工作流与公共运行层](framework-api-design/15-multiple-workflows/README.md)：在同一应用中运行审核与 RAG 两个独立工作流，只共享编译、运行和依赖校验能力。
 - [框架 API 设计 16：可治理的多工作流运行层](framework-api-design/16-governable-workflow-runtime/README.md)：为多工作流公共层增加版本、RunID、Observer、节点名称、结构化错误和请求级运行保护。
+- [框架 API 设计 17：RAG 文档索引工作流](framework-api-design/17-rag-indexing-workflow/README.md)：建立完整索引拓扑，真实解析 Markdown、文本、PDF、DOCX 和 XLSX，并将未实现的下游阶段明确标记为模拟。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。
