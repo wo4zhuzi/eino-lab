@@ -10,6 +10,7 @@ require (
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20250225083118-fd27d80f189c
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/devops v0.1.9
+	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260806102959-f0ac8222e281
 	github.com/xuri/excelize/v2 v2.9.0
 )
 
