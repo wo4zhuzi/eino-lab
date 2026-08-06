@@ -37,7 +37,8 @@ github.com/cloudwego/eino-ext/components/document/parser/docx @ 90a15623ddb6
 github.com/xuri/excelize/v2                                  @ v2.9.0
 ```
 
-运行 Demo 17 不需要模型、数据库、API Key 或 Temporal Server。
+运行 Demo 17 不需要模型、数据库、API Key 或 Temporal Server。仓库还锁定
+EinoExt DevOps `v0.1.9`，仅在 `EINO_DEV=true` 时启动本地调试服务。
 
 ## 支持格式
 
@@ -101,6 +102,44 @@ build_result=completed
 
 实际程序输出为包含上述字段的 JSON。
 
+## 使用 Eino Dev 查看工作流
+
+在仓库根目录启动开发模式：
+
+```bash
+EINO_DEV=true go run ./examples/go-study/framework-api-design/17-rag-indexing-workflow
+```
+
+程序完成一次默认文档解析后会保持运行，并输出：
+
+```text
+eino_dev=ready address=127.0.0.1:52538
+按 Ctrl+C 停止 Eino Dev 模式
+```
+
+在 GoLand Eino Dev 中连接 `127.0.0.1:52538`，选择
+`rag_document_indexing@v1`，即可查看从 `inspect_source` 到 `build_result`
+的完整 Chain。也可以先验证服务和 Graph 是否已经注册：
+
+```bash
+curl http://127.0.0.1:52538/eino/devops/ping
+curl http://127.0.0.1:52538/eino/devops/debug/v1/graphs
+```
+
+从 START 节点执行 Test Run 时，输入中的 `SourceURI` 必须是运行 Demo 17
+进程可读取的文件路径，例如：
+
+```json
+{
+  "run_id": "demo17-eino-dev-run",
+  "source_uri": "examples/go-study/framework-api-design/17-rag-indexing-workflow/testdata/knowledge.md"
+}
+```
+
+调试结束后在运行程序的终端按 `Ctrl+C`。不设置 `EINO_DEV` 时，程序仍在
+输出一次结果后直接退出。完整原理和安全边界见
+[Eino Dev 查看 Code First Workflow](../../../../docs/learning/eino/compose/eino-dev-code-first.md)。
+
 ## 验证
 
 在仓库根目录执行：
@@ -124,6 +163,7 @@ go vet ./...
 - 本示例限制单文件最大 `32 MiB`。生产值应按来源、解析器内存模型和 Worker 资源分别配置。
 - Eino Graph 负责当前进程内的索引拓扑，不提供节点崩溃恢复。引入 Temporal 后，每个外部操作应放入 Activity，并只在 Workflow History 中传递产物 ID。
 - 当前没有 Chunk、Embedding、PostgreSQL/pgvector、索引校验和版本发布；输出已经明确标记这些阶段为模拟。
+- Eino Dev 仅用于本地开发调试，默认监听 `127.0.0.1:52538`；不要将调试接口暴露到公网或生产环境。
 
 ## 下一步
 
