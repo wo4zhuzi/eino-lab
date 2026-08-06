@@ -15,14 +15,19 @@ const (
 
 var (
 	ErrNilContext          = errors.New("context 不能为空")
-	ErrInvalidConfig       = errors.New("索引工作流配置无效")
+	ErrInvalidDependencies = errors.New("索引工作流依赖无效")
 	ErrInvalidRunID        = errors.New("run_id 不能为空")
 	ErrWorkflowUnavailable = errors.New("索引工作流未初始化")
 )
 
-// DocumentIngestor 定义工作流依赖的最小文档摄取能力。
-type DocumentIngestor interface {
+// Ingestor 定义工作流依赖的最小文档摄取能力。
+type Ingestor interface {
 	Ingest(ctx context.Context, uri string) (*ingestion.Result, error)
+}
+
+// Dependencies 保存由应用启动层创建和管理的外部依赖。
+type Dependencies struct {
+	Ingestor Ingestor
 }
 
 // Request 是一次文档索引工作流请求。

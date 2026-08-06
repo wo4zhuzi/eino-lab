@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/cloudwego/eino-ext/devops"
+	ingestion "github.com/wo4zhuzi/eino-document-ingestion"
 	"github.com/wo4zhuzi/eino-lab/examples/go-study/framework-api-design/18-decoupled-document-ingestion/indexworkflow"
 )
 
@@ -36,7 +37,15 @@ func main() {
 		}
 	}
 
-	workflow, err := indexworkflow.New(ctx, indexworkflow.DefaultConfig())
+	ingestor, err := ingestion.New(ctx, ingestion.Config{
+		MaxFileBytes: ingestion.DefaultMaxFileBytes,
+	})
+	if err != nil {
+		panic(fmt.Errorf("创建文档摄取器: %w", err))
+	}
+	workflow, err := indexworkflow.New(ctx, indexworkflow.Dependencies{
+		Ingestor: ingestor,
+	})
 	if err != nil {
 		panic(err)
 	}

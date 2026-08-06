@@ -8,7 +8,7 @@ import (
 )
 
 type workflowHandlers struct {
-	ingestor DocumentIngestor
+	ingestor Ingestor
 }
 
 func (h *workflowHandlers) ingest(ctx context.Context, request Request) (workflowState, error) {

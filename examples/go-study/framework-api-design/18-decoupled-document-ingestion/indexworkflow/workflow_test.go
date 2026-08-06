@@ -73,7 +73,13 @@ func TestWorkflowIntegratesRealIngestorForMarkdown(t *testing.T) {
 	if err := os.WriteFile(path, []byte("# Eino\n\n独立摄取组件。\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
-	workflow, err := New(context.Background(), DefaultConfig())
+	ingestor, err := ingestion.New(context.Background(), ingestion.Config{
+		MaxFileBytes: ingestion.DefaultMaxFileBytes,
+	})
+	if err != nil {
+		t.Fatalf("ingestion.New() error = %v", err)
+	}
+	workflow, err := New(context.Background(), Dependencies{Ingestor: ingestor})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -114,11 +120,11 @@ func TestWorkflowValidatesBoundary(t *testing.T) {
 	if _, err := workflow.Run(context.Background(), Request{RunID: "run", SourceURI: "document.md"}); !errors.Is(err, ingestion.ErrNoParsedContent) {
 		t.Fatalf("Run(nil result) error = %v", err)
 	}
-	if _, err := New(nil, DefaultConfig()); !errors.Is(err, ErrNilContext) {
+	if _, err := New(nil, Dependencies{Ingestor: stub}); !errors.Is(err, ErrNilContext) {
 		t.Fatalf("New(nil) error = %v", err)
 	}
-	if _, err := New(context.Background(), Config{}); !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf("New(invalid config) error = %v", err)
+	if _, err := New(context.Background(), Dependencies{}); !errors.Is(err, ErrInvalidDependencies) {
+		t.Fatalf("New(invalid dependencies) error = %v", err)
 	}
 	var unavailable *Workflow
 	if _, err := unavailable.Run(context.Background(), Request{}); !errors.Is(err, ErrWorkflowUnavailable) {
@@ -126,9 +132,9 @@ func TestWorkflowValidatesBoundary(t *testing.T) {
 	}
 }
 
-func newWorkflowWithIngestor(t *testing.T, ingestor DocumentIngestor) *Workflow {
+func newWorkflowWithIngestor(t *testing.T, ingestor Ingestor) *Workflow {
 	t.Helper()
-	workflow, err := New(context.Background(), Config{Ingestor: ingestor})
+	workflow, err := New(context.Background(), Dependencies{Ingestor: ingestor})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

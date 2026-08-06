@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cloudwego/eino/compose"
-	ingestion "github.com/wo4zhuzi/eino-document-ingestion"
 )
 
 const (
@@ -22,17 +21,6 @@ const (
 	nodeBuildResult    = "build_result"
 )
 
-// Config 保存文档索引工作流的资源边界。
-type Config struct {
-	MaxFileBytes int64
-	Ingestor     DocumentIngestor
-}
-
-// DefaultConfig 返回适合本地验证的默认值。
-func DefaultConfig() Config {
-	return Config{MaxFileBytes: ingestion.DefaultMaxFileBytes}
-}
-
 // Workflow 保存编译一次、重复执行的 Eino 索引工作流。
 type Workflow struct {
 	runnable compose.Runnable[Request, Result]
@@ -43,24 +31,16 @@ func Descriptor() string {
 	return workflowName + "@" + workflowVersion
 }
 
-// New 创建或接收文档摄取依赖，并编译完整索引拓扑。
-func New(ctx context.Context, config Config) (*Workflow, error) {
+// New 使用应用启动层提供的依赖编译完整索引拓扑。
+func New(ctx context.Context, dependencies Dependencies) (*Workflow, error) {
 	if ctx == nil {
 		return nil, ErrNilContext
 	}
-	ingestor := config.Ingestor
-	if ingestor == nil {
-		if config.MaxFileBytes < 1 {
-			return nil, fmt.Errorf("%w: MaxFileBytes 必须大于 0", ErrInvalidConfig)
-		}
-		var err error
-		ingestor, err = ingestion.New(ctx, ingestion.Config{MaxFileBytes: config.MaxFileBytes})
-		if err != nil {
-			return nil, fmt.Errorf("创建文档摄取器: %w", err)
-		}
+	if dependencies.Ingestor == nil {
+		return nil, fmt.Errorf("%w: Ingestor 不能为空", ErrInvalidDependencies)
 	}
 
-	handlers := &workflowHandlers{ingestor: ingestor}
+	handlers := &workflowHandlers{ingestor: dependencies.Ingestor}
 	chain := compose.NewChain[Request, Result]()
 	chain.
 		AppendLambda(

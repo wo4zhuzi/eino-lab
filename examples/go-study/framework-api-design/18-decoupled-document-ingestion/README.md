@@ -14,10 +14,10 @@ eino-document-ingestion
 
 rag_document_indexing@v2
   负责：RunID、DocumentID、VersionID、解析单元 ID、后续索引阶段编排
-  依赖：DocumentIngestor 接口
+  依赖：Ingestor 最小接口，由应用启动层显式注入
 ```
 
-工作流不再包含格式注册表、PDF/DOCX/XLSX Parser 实现或文件签名检查。默认使用真实摄取组件，也可以通过 `Config.Ingestor` 注入测试替身或其他实现。
+工作流不再包含格式注册表、PDF/DOCX/XLSX Parser 实现或文件签名检查，也不负责创建外部资源。应用启动层创建真实摄取组件并通过 `Dependencies.Ingestor` 注入；测试或其他应用可以注入满足同一最小接口的实现。
 
 ## 学习目标
 
@@ -26,6 +26,28 @@ rag_document_indexing@v2
 3. 保持第三方错误链，使调用方仍可通过 `errors.Is` 判断摄取错误。
 4. 复制摄取结果后再补充索引元数据，避免修改依赖方返回的 Document。
 5. 在拆分实现后保留完整、可观察的 Eino Chain。
+
+## 依赖组装
+
+生产依赖由应用启动层显式创建，工作流构造函数只校验并保存依赖：
+
+```go
+ingestor, err := ingestion.New(ctx, ingestion.Config{
+    MaxFileBytes: ingestion.DefaultMaxFileBytes,
+})
+if err != nil {
+    return fmt.Errorf("创建文档摄取器: %w", err)
+}
+
+workflow, err := indexworkflow.New(ctx, indexworkflow.Dependencies{
+    Ingestor: ingestor,
+})
+if err != nil {
+    return fmt.Errorf("创建索引工作流: %w", err)
+}
+```
+
+这种组装方式让应用层统一管理摄取器的配置和生命周期，工作流层只依赖 `Ingest` 方法。缺少依赖时会在启动阶段返回 `ErrInvalidDependencies`。
 
 ## 版本与前置条件
 
@@ -80,7 +102,7 @@ publish_index=simulated
 build_result=completed
 ```
 
-远程 URL 默认拒绝私网、环回、链路本地和保留地址。需要鉴权、代理、私网或自定义 HTTP Client 时，应先构造 `ingestion.Ingestor`，再通过 `Config.Ingestor` 注入工作流；不要把令牌写入 URL、源码或日志。
+远程 URL 默认拒绝私网、环回、链路本地和保留地址。需要鉴权、代理、私网或自定义 HTTP Client 时，应在启动层配置 `ingestion.Ingestor`，再通过 `Dependencies.Ingestor` 注入工作流；不要把令牌写入 URL、源码或日志。
 
 ## 使用 Eino Dev 查看工作流
 

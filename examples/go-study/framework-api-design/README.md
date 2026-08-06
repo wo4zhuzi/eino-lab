@@ -357,7 +357,7 @@ Gin middleware 源码
 
 可运行示例：[18-decoupled-document-ingestion](18-decoupled-document-ingestion/README.md)。
 
-通过标准：工作流代码不再包含具体 Parser 与文件签名实现；默认接入真实摄取组件，同时可注入 fake 验证编排和错误传播。
+通过标准：工作流代码不再包含具体 Parser 与文件签名实现；启动层显式注入真实摄取组件，同时可注入 fake 验证编排和错误传播。
 
 ## 主题之间的关系
 
