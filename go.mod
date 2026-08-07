@@ -7,7 +7,6 @@ require (
 	github.com/cloudwego/eino-ext/components/document/loader/file v0.0.0-20250225083118-fd27d80f189c
 	github.com/cloudwego/eino-ext/components/document/parser/docx v0.0.0-20260803030130-90a15623ddb6
 	github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260803030130-90a15623ddb6
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20250225083118-fd27d80f189c
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/devops v0.1.9
 	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260806102959-f0ac8222e281
@@ -29,7 +28,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect

@@ -402,4 +402,4 @@ go run ./examples/diagnosable-weather-agent "北京天气怎么样？"
 
 ## 下一步
 
-本轮 Eino L2 学习已完成，Compose L3 也按独立协议完成。当前进入 [RAG L2 学习协议](rag/learning-protocol.md) 的决策门 1；本协议保持 L2 完成状态，不扩大为生产就绪评估。
+本轮 Eino L2 学习已完成，Compose L3 也按独立协议完成。后续 RAG 实践沿文档摄取、Chunking、Embedding、持久化和检索分层推进；本协议保持 L2 完成状态，不扩大为生产就绪评估。

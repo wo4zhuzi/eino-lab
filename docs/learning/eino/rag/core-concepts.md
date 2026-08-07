@@ -278,9 +278,9 @@ passage: 资料正文
 
 两者的向量不要求完全相同，但模型训练保证它们仍然可以比较。
 
-## 七、HashingEmbedder 与语义 Embedding
+## 七、词法基线与语义 Embedding
 
-`已验证` 当前项目的 `HashingEmbedder` 没有训练模型。它执行：
+Hashing、TF-IDF 等词法基线没有训练模型，常见处理过程是：
 
 ```text
 文本规范化
@@ -306,7 +306,7 @@ passage: 资料正文
 钱多久能退回来
 ```
 
-因此它可以验证 Embedder 接口、向量维度、相似度排序和错误路径，不能代表生产语义检索质量。
+因此这类实现适合验证 Embedder 接口、向量维度、相似度排序和错误路径，不能代表生产语义检索质量。
 
 ## 八、Retriever 到底做什么
 
@@ -717,83 +717,45 @@ Answer Policy        何时回答、何时拒答、何时人工复核
 
 ### 当前项目如何面对差异性
 
-当前个人知识库先固定：
+当前组件化方向是：
 
 ```text
-Source Connector  = 本地文件夹
-Parser Profile    = Markdown 文本解析
-Chunking Profile  = 标题切分 + 后续长度兜底
-Embedding Space   = 第一版固定一个模型版本
-Store             = PostgreSQL + pgvector
-Retrieval Policy  = 向量 TopK + ScoreThreshold
-Citation Policy   = 相对文件路径 + 标题路径
-Access Policy     = 单用户，不做多租户 ACL
+Source Connector  = 独立文档摄取组件
+Parser Profile    = 按格式注册 Parser
+Chunking Profile  = 独立 Chunking 组件按场景选择策略
+Embedding Space   = 索引工作流显式配置模型版本
+Store             = 由应用选择 PostgreSQL + pgvector 等实现
+Retrieval Policy  = 向量、关键词、过滤和排序策略
+Citation Policy   = 来源、标题、页码或表格位置
+Access Policy     = 由具体知识库应用定义
 ```
 
-刻意暂不支持 PDF、Word、网页、多租户和复杂权限。等当前场景完成持久化、更新、删除和真实语义检索评测后，再通过增加新的 Parser、Chunking Profile 或 Retrieval Policy 扩展，而不是重写主链路。
+统一的数据契约和工作流不绑定某一种文档格式或 Chunk 算法。新增场景时通过 Parser、Chunking Profile 或 Retrieval Policy 扩展，而不是重写主链路。
 
-## 十四、本项目当前真正实现了什么
+## 十四、本仓库当前实现范围
 
-### 索引 Graph
+当前仓库已经实现独立文档摄取示例和索引工作流骨架。摄取组件负责数据源校验、格式路由和解析，索引工作流中的 Chunk、Embedding、持久化、校验和发布仍按阶段演进。
 
-`已验证` 当前实现是：
+早期内存 RAG 最小闭环示例已经移除，不再把 Hashing Embedder、内存向量 Store 或确定性 ChatModel 作为当前实现。仓库中的通用 RAG 文档用于说明组件契约和设计边界，不代表已经存在端到端生产闭环。
 
 ```text
-FileLoader
-  → Markdown Header Splitter
-  → prepareChunks 补充 source、heading、chunk_id
-  → MemoryVectorStore.Store
-      → HashingEmbedder
-      → 保存 Chunk Document + Vector
+Source
+  → eino-document-ingestion
+  → 标准化 Documents
+  → 独立 Chunking 组件（仓库外演进）
+  → 索引工作流中的 Embedding、持久化、校验和发布
 ```
 
-### 查询 Graph
+## 十五、从组件骨架到可用闭环
 
-`已验证` 当前实现是：
-
-```text
-Question
-  → 校验非空
-  → MemoryVectorStore.Retrieve
-      → HashingEmbedder 生成问题向量
-      → 逐条计算余弦相似度
-      → ScoreThreshold + TopK
-  → Branch
-      ├─ 无证据：固定拒答
-      └─ 有证据：Prompt → ExtractiveChatModel
-  → Answer + Retrieved Chunks
-```
-
-### 当前 Store 的数据结构
+`建议` 按可独立验证的组件顺序推进：
 
 ```text
-memoryEntry
-  ├─ document：Chunk 正文和元数据
-  └─ vector：Chunk 向量
-```
-
-它实现了向量生成、余弦排序、TopK、阈值和引用链路，但只存在 Go 进程内存中：
-
-```text
-程序启动 → 重新读取和索引
-程序退出 → Chunk 和向量丢失
-```
-
-当前示例没有接入 Redis，也没有接入 PostgreSQL。PostgreSQL + pgvector 目前只完成了安装文档，仍属于待验证迁移目标。
-
-## 十五、从当前示例到可用最小闭环
-
-`建议` 按单变量顺序推进：
-
-```text
-第一步：MemoryVectorStore → PostgreSQL + pgvector
-目标：持久化、重启复用、增量更新、删除、原文追溯
-
-第二步：HashingEmbedder → 正式语义 Embedding 模型
-目标：验证近义表达和真实自然语言召回
-
-第三步：建立检索评测集
-目标：分别判断切分、召回、排序和生成是否正确
+第一步：实现可扩展的父子 Chunking 组件
+第二步：持久化 DocumentVersion、父子 Chunk 和向量
+第三步：接入正式语义 Embedding 模型
+第四步：建立切分、召回、排序和生成评测集
+第五步：实现检索、引用、拒答和版本发布闭环
 ```
 
 可用最小闭环至少应覆盖：
@@ -819,7 +781,7 @@ memoryEntry
 | 向量库只保存一串向量 | 不一定 | 还可保存 chunk_id、Chunk 正文和过滤元数据 |
 | 原始文件查询时完全没有用 | 否 | 用于引用、权限、原文查看和上下文扩展 |
 | PostgreSQL 会自动把文本变成向量 | 否 | pgvector 只存储和检索向量，Embedder 负责生成向量 |
-| 当前项目已经持久化 | 否 | 当前使用 MemoryVectorStore，进程退出即丢失 |
+| 完成 pgvector 安装就表示索引已经持久化 | 否 | 仍需实现数据模型、事务、版本发布和检索链路 |
 
 ## 十七、阅读顺序
 
@@ -831,6 +793,4 @@ memoryEntry
 相关文档：
 
 - [RAG 架构全景](architecture.md)
-- [RAG 学习协议](learning-protocol.md)
 - [PostgreSQL + pgvector 本地安装](postgresql-pgvector-setup.md)
-- [当前最小示例说明](../../../../examples/rag-minimal/README.md)

@@ -2,7 +2,7 @@
 
 ## 目标
 
-使用 Docker 启动一个独立的 PostgreSQL 16 + pgvector 实例，为后续把 `MemoryVectorStore` 迁移为持久化 Store 做准备。
+使用 Docker 启动一个独立的 PostgreSQL 16 + pgvector 实例，为后续持久化 Document、Chunk 和向量做准备。
 
 完成本文后应满足：
 
@@ -11,7 +11,7 @@
 - `vector` 扩展已经启用。
 - 可以创建向量字段并执行余弦距离查询。
 
-当前 `examples/rag-minimal/` 尚未连接 PostgreSQL。完成安装只代表外部依赖准备完成，不代表 Store 迁移已经完成。
+完成安装只代表外部依赖准备完成，不代表 Chunk 数据模型、索引写入和检索链路已经实现。
 
 ## 版本与资源约定
 
@@ -296,7 +296,7 @@ docker exec eino-lab-pgvector \
   -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
-安装验证通过后，下一步才是设计 PostgreSQL 表结构，并预测把 `MemoryVectorStore` 替换为 pgvector Store 会影响哪些文件和运行链路。
+安装验证通过后，下一步才是设计 PostgreSQL 表结构，并实现 DocumentVersion、父子 Chunk、向量、索引版本和检索查询之间的关联。
 
 ## 官方参考
 

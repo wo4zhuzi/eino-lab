@@ -24,8 +24,8 @@
 |---|---|---|---|---|---|
 | R-10 | Retriever、Embedding、Indexer 和 Document Transformer 都可注册为 Compose 节点 | 已验证 | [`compose/graph.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/graph.go)、`component_to_graph_node.go` | 高 | 在线查询路径只先使用 Retriever 节点 |
 | R-11 | `compose.WithRetrieverOption` 可在调用时传递 Retriever 选项并指定节点 | 已验证 | [`compose/graph_call_options.go`](https://github.com/cloudwego/eino/blob/v0.9.12/compose/graph_call_options.go) | 高 | 阶段 4 传递 TopK 和阈值 |
-| R-12 | Parent Indexer 负责切分、生成子 ID 并保存父文档关系 | 已验证 | [`flow/indexer/parent/parent.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/indexer/parent/parent.go) | 高 | 第一项目省略，避免提前引入父子检索 |
-| R-13 | Parent Retriever 先召回子文档，再按父 ID 获取原文档 | 已验证 | [`flow/retriever/parent/parent.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/retriever/parent/parent.go) | 高 | 第一项目省略 |
+| R-12 | Parent Indexer 负责切分、生成子 ID 并保存父文档关系 | 已验证 | [`flow/indexer/parent/parent.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/indexer/parent/parent.go) | 高 | 独立 Chunking 组件设计参考 |
+| R-13 | Parent Retriever 先召回子文档，再按父 ID 获取原文档 | 已验证 | [`flow/retriever/parent/parent.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/retriever/parent/parent.go) | 高 | 父文档持久化与查询聚合设计参考 |
 | R-14 | MultiQuery Retriever 通过 Query Rewrite、并发检索和去重融合提高召回 | 已验证 | [`flow/retriever/multiquery/multi_query.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/retriever/multiquery/multi_query.go) | 高 | 基础闭环后再学习 |
 | R-15 | Router Retriever 可调用多个 Retriever 并默认使用 RRF 融合结果 | 已验证 | [`flow/retriever/router/router.go`](https://github.com/cloudwego/eino/blob/v0.9.12/flow/retriever/router/router.go) | 高 | 混合检索阶段再学习 |
 
@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | R-16 | Eino 核心提供组件契约和编排，不是带资料管理 UI、权限和运维能力的知识库成品 | 已验证 | 核心公开包、README 责任范围；具体实现明确位于 EinoExt | 高 |
 | R-17 | 索引写路径不应默认放进每次问答；Indexer 和 Retriever 是互补的独立组件 | 建议 | Indexer/ Retriever 包职责和常见运行生命周期 | 高 |
-| R-18 | 第一条学习主路径不需要 Parent、MultiQuery、Router 或 Reranker | 建议 | 它们包装基础 Indexer/Retriever，删除后基础写读闭环仍成立 | 高 |
+| R-18 | 基础写读闭环不依赖 Parent、MultiQuery、Router 或 Reranker | 建议 | 它们包装基础 Indexer/Retriever，删除后基础写读闭环仍成立 | 高 |
 
 ## 官方示例证据
 
@@ -52,14 +52,3 @@
 | R-27 | 锁定版本的官方 Redis 初始化不支持从配置传入认证信息 | 已验证 | `pkg/redis/redis.go` 的 `Init()` 固定 `localhost:6379`，`redis.Options` 仅设置 `Addr` 与 `Protocol`；索引和检索组件初始化同样未设置密码 | 高 | 原样运行与临时认证适配分开记录；自定义项目把认证视为 Store 配置责任 |
 | R-28 | 仓库根 `.env` 中的 Redis 地址和密码可以通过当前服务认证 | 已验证 | 仅检查变量名存在；临时源码副本读取认证配置后，运行不再返回 `NOAUTH`，未读取或输出密码值 | 高 | 认证不是当前剩余阻塞 |
 | R-29 | 当前 Redis 不提供官方示例要求的 RediSearch 命令 | 已验证 | 认证成功后的 `FT.INFO eino:doc:vector_index` 返回 `ERR unknown command 'FT.INFO'` | 高 | 官方示例需要 Redis Stack/RediSearch，或纵向项目使用其他 Store |
-
-## 自定义闭环证据
-
-| ID | 结论 | 标签 | 精确证据 | 置信度 | 后续验证 |
-|---|---|---|---|---|---|
-| R-30 | 官方示例锁定的 File Loader 与 Markdown Splitter 能和当前 Eino `v0.9.12` 一起构建运行 | 已验证 | 根 `go.mod`；`go test ./... -count=1` 与 `go vet ./...` 通过 | 高 | 无 |
-| R-31 | 自定义索引 Graph 能把一个 Markdown 文件加载、按标题切分、补齐来源/标题/Chunk ID 并写入 Indexer | 已验证 | `go run ./examples/rag-minimal` 输出 `documents=1 chunks=5`；`TestAppIndexesAndAnswersWithEvidence`、`TestIndexingTheSameFileKeepsStableChunkIDs` | 高 | 阶段 5 追踪节点与源码入口 |
-| R-32 | 查询 Graph 能按分数召回 Document，通过 Branch 控制生成，并返回真实召回记录 | 已验证 | CLI 首条召回标题为“RAG 主路径”、分数 `0.4777`、ChatModel 调用 1 次；正常路径测试通过 | 高 | 阶段 5 追踪 Local State 与错误传播 |
-| R-33 | 空问题在 Retriever 前失败；无证据跳过 ChatModel；Indexer/Retriever 不可用保留错误链；Embedding 超时保留 DeadlineExceeded | 已验证 | `go test -v ./examples/rag-minimal -count=1` 对应四类测试全部通过；详见 `failure-matrix.md` | 高 | 无 |
-| R-34 | 内存 Store 遵守 TopK、ScoreThreshold、向量数量和维度契约，并支持并发查询 | 已验证 | Store 契约测试通过；`go test -race ./examples/rag-minimal -count=1` 通过 | 高 | 阶段 6 用 PostgreSQL + pgvector Store 执行单变量迁移 |
-| R-35 | Hashing Embedder 的实际召回仅能证明确定性局部特征匹配，不能证明生产语义质量 | 建议 | 实现是字符 1-3 gram feature hashing，无训练语义模型 | 高 | 真实产品需要独立 Embedding 选型与评测集 |
