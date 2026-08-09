@@ -21,9 +21,10 @@ Go 函数类型
   -> 可治理的多工作流运行层
   -> RAG 文档索引工作流：真实解析与完整骨架
   -> 解耦文档摄取：复用独立 Loader 与 Parser 组件
+  -> 全包化文档流水线：Loader、结构化 Parser 与 Chunk
 ```
 
-这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后十项是综合与工程应用。
+这些不是互相独立的主题。前四项是 Go 语言能力，中间四项是框架常用机制，最后十一项是综合与工程应用。
 
 ## 第一阶段：函数可以被保存和传递
 
@@ -359,6 +360,16 @@ Gin middleware 源码
 
 通过标准：工作流代码不再包含具体 Parser 与文件签名实现；启动层显式注入真实摄取组件，同时可注入 fake 验证编排和错误传播。
 
+### 19. 全包化文档流水线
+
+组合知识：标准输出契约、结构化 Parser、策略模式、稳定 ID、Package 集成和 Eino Chain。
+
+学习目标：使用独立 Package 串联 Loader、Parser 与 Chunk，并根据 Parser 输出能力自动选择 Structure-aware 或 Parent-child 策略。
+
+可运行示例：[19-packaged-document-pipeline](19-packaged-document-pipeline/README.md)。
+
+通过标准：Markdown 保留结构 block ID 并进入 Structure-aware Chunk；其他支持格式依据非结构化输出契约进入 Parent-child Chunk；工作流不根据扩展名猜测策略。
+
 ## 主题之间的关系
 
 | 后续主题 | 依赖的前置知识 |
@@ -380,6 +391,7 @@ Gin middleware 源码
 | 可治理的多工作流运行层 | 多工作流公共层、Functional Options、Callback、错误链、并发安全 |
 | RAG 文档索引工作流 | 可治理工作流、Chain、Loader、Parser、稳定标识、错误链 |
 | 解耦文档摄取 | RAG 索引工作流、接口隔离、依赖注入、组件所有权 |
+| 全包化文档流水线 | 解耦文档摄取、标准输出契约、结构化 Parser、Chunk 策略 |
 
 ## 推荐练习顺序
 
@@ -403,5 +415,6 @@ Gin middleware 源码
 16. 为公共运行层增加版本、RunID、Observer、结构化错误和请求级运行保护。
 17. 建立真实文档解析与显式模拟下游组成的完整索引拓扑。
 18. 将 Loader 和 Parser 替换为注入的独立摄取组件，确认工作流入口保持稳定。
+19. 接入独立结构化 Parser 和 Chunking Package，验证能力契约驱动的策略选择。
 
 不要同时学习多个主题。每一步都回答：函数在哪里定义、在哪里保存、在哪里调用、由谁传入参数。

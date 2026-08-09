@@ -9,7 +9,9 @@ require (
 	github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260803030130-90a15623ddb6
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/devops v0.1.9
-	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260806102959-f0ac8222e281
+	github.com/wo4zhuzi/eino-document-chunking v0.0.0-20260808035856-70e40cb7a820
+	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260808020154-7cc1616a8a0f
+	github.com/wo4zhuzi/eino-document-parser-structured v0.0.0-20260808024546-02602d613c64
 	github.com/xuri/excelize/v2 v2.9.0
 )
 
@@ -51,6 +53,7 @@ require (
 	github.com/xuri/efp v0.0.0-20240408161823-9ad904a10d6d // indirect
 	github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yuin/goldmark v1.8.5 // indirect
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect

@@ -144,8 +144,12 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
-github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260806102959-f0ac8222e281 h1:DgVikl6dmcqw4tkNMr/DoneNiPRPt7IDWIXDzSi8ROw=
-github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260806102959-f0ac8222e281/go.mod h1:S4XpsjibFFsuvPfs0YNYIXBmkmBt/ngYGG/5rfEOWAA=
+github.com/wo4zhuzi/eino-document-chunking v0.0.0-20260808035856-70e40cb7a820 h1:UXRR+buCcFdLp9dS2TB8arlimmzy+UoUXmVwlvL5CuU=
+github.com/wo4zhuzi/eino-document-chunking v0.0.0-20260808035856-70e40cb7a820/go.mod h1:pT1OZHpKQe2lVltGnNXT+ABGEax/uHJ9t8xc3vmQXrI=
+github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260808020154-7cc1616a8a0f h1:1lz2sqTA3J7kHdEKm52xtDg7bYsAmFWxTdA89CF6/JQ=
+github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260808020154-7cc1616a8a0f/go.mod h1:S4XpsjibFFsuvPfs0YNYIXBmkmBt/ngYGG/5rfEOWAA=
+github.com/wo4zhuzi/eino-document-parser-structured v0.0.0-20260808024546-02602d613c64 h1:X6qa8w1dOriFHpCGyZrMgh/MjYELMTkKQZphX9tdlmw=
+github.com/wo4zhuzi/eino-document-parser-structured v0.0.0-20260808024546-02602d613c64/go.mod h1:QVoJIMZ4QYhNV8sMrjfKZcJtsxkXzp9YUtLV/1p/GZI=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
 github.com/xuri/efp v0.0.0-20240408161823-9ad904a10d6d h1:llb0neMWDQe87IzJLS4Ci7psK/lVsjIS2otl+1WyRyY=
@@ -156,6 +160,8 @@ github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7 h1:hPVCafDV85blFTabnqKgNh
 github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7/go.mod h1:WwHg+CVyzlv/TX9xqBFXEZAuxOPxn2k1GNHwG41IIUQ=
 github.com/yargevad/filepathx v1.0.0 h1:SYcT+N3tYGi+NvazubCNlvgIPbzAk7i7y2dwg3I5FYc=
 github.com/yargevad/filepathx v1.0.0/go.mod h1:BprfX/gpYNJHJfc35GjRRpVcwWXS89gGulUIU5tK3tA=
+github.com/yuin/goldmark v1.8.5 h1:r6N5afV5qj/5S4UTch8agZHJ8UxNCMwX7WjkkJam2NA=
+github.com/yuin/goldmark v1.8.5/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 go.uber.org/mock v0.4.0 h1:VcM4ZOtdbR4f6VXfiOpwpVJDL6lCReaZ6mw31wqh7KU=
 go.uber.org/mock v0.4.0/go.mod h1:a6FSlNadKUHUa9IP5Vyt1zh4fC7uAwxMutEAscFbkZc=
 golang.org/x/arch v0.11.0 h1:KXV8WWKCXm6tRpLirl2szsO5j/oOODwZf4hATmGVNs4=

@@ -24,4 +24,6 @@
 - [框架 API 设计 15：多工作流与公共运行层](framework-api-design/15-multiple-workflows/README.md)：在同一应用中运行审核与 RAG 两个独立工作流，只共享编译、运行和依赖校验能力。
 - [框架 API 设计 16：可治理的多工作流运行层](framework-api-design/16-governable-workflow-runtime/README.md)：为多工作流公共层增加版本、RunID、Observer、节点名称、结构化错误和请求级运行保护。
 - [框架 API 设计 17：RAG 文档索引工作流](framework-api-design/17-rag-indexing-workflow/README.md)：建立完整索引拓扑，真实解析 Markdown、文本、PDF、DOCX 和 XLSX，并将未实现的下游阶段明确标记为模拟。
+- [框架 API 设计 18：解耦文档摄取](framework-api-design/18-decoupled-document-ingestion/README.md)：将 Loader、Parser、格式校验和远程数据源能力迁移到独立摄取 Package。
+- [框架 API 设计 19：全包化文档流水线](framework-api-design/19-packaged-document-pipeline/README.md)：使用独立 Package 串联 Loader、结构化 Parser 与 Chunk，并按 Parser 输出能力选择策略。
 - [`With...` 配置命名示例](with-option-naming/main.go)：通过可运行的 Go 代码和注释理解 `With`、`State`、`Pre/Post`、`Handler` 的含义。
