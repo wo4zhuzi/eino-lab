@@ -9,9 +9,9 @@ require (
 	github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260803030130-90a15623ddb6
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/devops v0.1.9
-	github.com/wo4zhuzi/eino-document-chunking v0.0.0-20260808035856-70e40cb7a820
-	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260808020154-7cc1616a8a0f
-	github.com/wo4zhuzi/eino-document-parser-structured v0.0.0-20260808024546-02602d613c64
+	github.com/wo4zhuzi/eino-document-chunking v0.0.0-20260809141624-c95264b0c1fe
+	github.com/wo4zhuzi/eino-document-ingestion v0.0.0-20260809134505-3e413ddcc4db
+	github.com/wo4zhuzi/eino-document-parser-structured v0.0.0-20260809135647-18c7bac60bdc
 	github.com/xuri/excelize/v2 v2.9.0
 )
 

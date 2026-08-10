@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultProfileName       = "rag-document-indexing"
-	defaultProfileVersion    = "v1"
+	defaultProfileVersion    = "v2"
 	defaultParentMaxRunes    = 2000
 	defaultChildMaxRunes     = 500
 	defaultStructureMaxRunes = 1800
@@ -81,7 +81,7 @@ func NewAutomaticChunker(config ChunkConfig) (*AutomaticChunker, error) {
 	structureAware, err := structureaware.NewStructureAwareStrategy(structureaware.StructureAwareConfig{
 		MaxRunes:       config.StructureMaxRunes,
 		MinRunes:       config.StructureMinRunes,
-		HeadingContext: structureaware.HeadingContextMetadataOnly,
+		HeadingContext: structureaware.HeadingContextPrepend,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: 创建 Structure-aware 策略: %w", ErrInvalidChunkConfig, err)

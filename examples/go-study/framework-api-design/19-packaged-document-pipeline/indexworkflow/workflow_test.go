@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestWorkflowUsesStructuredMarkdownAndStructureAwareChunking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if result.Workflow != "rag_document_indexing@v3" || result.Status != "chunked_with_simulated_downstream" {
+	if result.Workflow != "rag_document_indexing@v4" || result.Status != "chunked_with_simulated_downstream" {
 		t.Fatalf("result identity = %#v", result)
 	}
 	if result.Parser != markdown.ParserInfo() {
@@ -59,20 +60,54 @@ func TestWorkflowUsesStructuredMarkdownAndStructureAwareChunking(t *testing.T) {
 	if result.Chunking == nil || result.Chunking.StrategyName != structureaware.StructureAwareStrategyName {
 		t.Fatalf("Chunking = %#v", result.Chunking)
 	}
-	if result.Chunking.AdapterName != "ingestion" || len(result.Chunking.Chunks) == 0 {
+	if result.Chunking.Profile.Name != defaultProfileName || result.Chunking.Profile.Version != defaultProfileVersion {
+		t.Fatalf("Chunking profile = %#v", result.Chunking.Profile)
+	}
+	if result.Chunking.AdapterName != "ingestion" || len(result.Chunking.Chunks) != 2 {
 		t.Fatalf("Chunking = %#v", result.Chunking)
 	}
-	for _, item := range result.Chunking.Chunks {
+	wantSemanticPaths := [][]string{{"安装"}, {"安装", "验证"}}
+	for index, item := range result.Chunking.Chunks {
 		if item.Kind != structureaware.ChunkKindStructure || len(item.SourceUnitIDs) == 0 {
 			t.Fatalf("chunk = %#v", item)
 		}
-		if _, ok := item.Metadata[structureaware.MetadataStructurePath].([]string); !ok {
+		structurePath, ok := item.Metadata[structureaware.MetadataStructurePath].([]string)
+		if !ok || len(structurePath) == 0 || structurePath[len(structurePath)-1] != item.SourceUnitIDs[0] {
 			t.Fatalf("chunk structure path = %#v", item.Metadata[structureaware.MetadataStructurePath])
+		}
+		semanticPath, ok := item.Metadata[structureaware.MetadataStructureSemanticPath].([]string)
+		if !ok || !reflect.DeepEqual(semanticPath, wantSemanticPaths[index]) {
+			t.Fatalf("chunk semantic path = %#v, want %#v", semanticPath, wantSemanticPaths[index])
 		}
 	}
 	assertStageStatuses(t, result.Stages)
 	if !result.Placeholder.Simulated || result.Placeholder.PersistedRecordCount != 0 {
 		t.Fatalf("Placeholder = %#v", result.Placeholder)
+	}
+}
+
+func TestWorkflowPrependsReadableContextWithoutLeakingStructureIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "commands.md")
+	writeFile(t, path, "# 安装\n\n```sh\nrun-install\n```\n")
+	workflow := newRealWorkflow(t)
+
+	result, err := workflow.Run(context.Background(), Request{
+		RunID:     "semantic-context-run",
+		SourceURI: path,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(result.Chunking.Chunks) != 2 {
+		t.Fatalf("chunks = %#v", result.Chunking.Chunks)
+	}
+	contextChunk := result.Chunking.Chunks[1]
+	if contextChunk.Content != "安装\n\n```sh\nrun-install\n```" || strings.Contains(contextChunk.Content, "md_") {
+		t.Fatalf("context chunk content = %q", contextChunk.Content)
+	}
+	wantSemanticPath := []string{"安装"}
+	if got := contextChunk.Metadata[structureaware.MetadataStructureSemanticPath]; !reflect.DeepEqual(got, wantSemanticPath) {
+		t.Fatalf("semantic path = %#v, want %#v", got, wantSemanticPath)
 	}
 }
 
@@ -109,6 +144,7 @@ func TestWorkflowPreservesStructuredIDsAndDoesNotMutateIngestorResult(t *testing
 		ingestion.MetadataStructureDepth:    0,
 		ingestion.MetadataStructurePath:     []string{"root"},
 		ingestion.MetadataStructureBoundary: "hard",
+		ingestion.MetadataStructureLabel:    "根标题",
 	}
 	childMetadata := map[string]any{
 		ingestion.MetadataStructureKind:     "paragraph",
@@ -153,10 +189,13 @@ func TestWorkflowPreservesStructuredIDsAndDoesNotMutateIngestorResult(t *testing
 	if chunker.received.Documents[1].MetaData[ingestion.MetadataStructureParentID] != "root" {
 		t.Fatalf("prepared child metadata = %#v", chunker.received.Documents[1].MetaData)
 	}
+	if chunker.received.Documents[0].MetaData[ingestion.MetadataStructureLabel] != "根标题" {
+		t.Fatalf("prepared root metadata = %#v", chunker.received.Documents[0].MetaData)
+	}
 	if _, ok := chunker.received.Documents[0].MetaData["document_id"]; !ok {
 		t.Fatalf("prepared metadata = %#v", chunker.received.Documents[0].MetaData)
 	}
-	if len(rootMetadata) != 4 || len(childMetadata) != 4 || documents[0].ID != "root" || documents[1].ID != "child" {
+	if len(rootMetadata) != 5 || len(childMetadata) != 4 || documents[0].ID != "root" || documents[1].ID != "child" {
 		t.Fatalf("摄取结果被原地修改: %#v", documents)
 	}
 }

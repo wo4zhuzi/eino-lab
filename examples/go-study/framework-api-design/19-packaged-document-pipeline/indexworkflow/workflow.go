@@ -10,7 +10,7 @@ import (
 
 const (
 	workflowName    = "rag_document_indexing"
-	workflowVersion = "v3"
+	workflowVersion = "v4"
 
 	nodeIngestDocument = "ingest_document"
 	nodeChunkDocument  = "chunk_document"

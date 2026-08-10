@@ -14,20 +14,20 @@ eino-document-ingestion
         |
         v
 eino-document-parser-structured/markdown
-  Markdown AST、结构 block、稳定 ID 与 eino_ingestion.structure.*
+  Markdown AST、结构 block、稳定 ID、Heading Label 与 eino_ingestion.structure.*
         |
         v
 eino-document-chunking
-  IngestionAdapter、策略选择、Chunk、关系与统计
+  IngestionAdapter、身份/语义路径归一化、策略选择、Chunk、关系与统计
 ```
 
-工作流只补充索引元数据。已有解析单元 ID 保持不变；仅为没有 ID 的非结构化单元生成稳定 ID。
+工作流只补充索引元数据。已有解析单元 ID 保持不变；仅为没有 ID 的非结构化单元生成稳定 ID。新版 `IngestionAdapter` 使用节点 ID 路径判断章节归属，并根据 Heading Label 生成可读语义路径，避免将内部 ID 写入 Chunk 正文。
 
 ## 学习目标
 
 1. 使用 `ParserInfo.Output` 作为 Parser 与 Chunker 的能力契约。
 2. 根据 `Structured` 自动选择策略，不在业务层根据扩展名猜测。
-3. 保留结构化 Parser 的 block ID、父节点和结构路径。
+3. 保留结构化 Parser 的 block ID、父节点和节点路径，并生成可读语义路径。
 4. 通过最小 `Ingestor` 与 `Chunker` 接口隔离工作流编排。
 5. 保留第三方错误链，使调用方可以通过 `errors.Is` 判断失败原因。
 
@@ -36,9 +36,9 @@ eino-document-chunking
 仓库使用 Go `1.26.x`、Eino `v0.9.12`，并锁定：
 
 ```text
-github.com/wo4zhuzi/eino-document-ingestion @ 7cc1616a8a0f
-github.com/wo4zhuzi/eino-document-parser-structured @ 02602d613c64
-github.com/wo4zhuzi/eino-document-chunking @ 70e40cb7a820
+github.com/wo4zhuzi/eino-document-ingestion @ 3e413ddcc4db
+github.com/wo4zhuzi/eino-document-parser-structured @ 18c7bac60bdc
+github.com/wo4zhuzi/eino-document-chunking @ c95264b0c1fe
 ```
 
 运行默认示例不需要模型、数据库、API Key 或 Temporal Server。支持本地文件以及受 ingestion 安全策略约束的 HTTP/HTTPS URL。
@@ -55,7 +55,7 @@ github.com/wo4zhuzi/eino-document-chunking @ 70e40cb7a820
 | DOCX | `section + structured=false` | Parent-child |
 | XLSX | `row + structured=false` | Parent-child |
 
-Structure-aware 使用中英混合知识库基线：`MaxRunes=1800`、`MinRunes=600`，结构路径只写入 Metadata。Parent-child 的父 Chunk 上限为 2000 字符，子 Chunk 上限为 500 字符。字符数按 Unicode rune 计算，不等同于模型 Token 数，生产配置应结合目标 Embedding 模型的 Tokenizer 和真实语料抽样调整。
+Structure-aware 使用中英混合知识库基线：`MaxRunes=1800`、`MinRunes=600`。章节身份路径与可读语义路径都会写入 Metadata；需要为拆分后不含 Heading 的 Chunk 补充上下文时，只把可读语义路径写入正文，不会写入内部 ID。Parent-child 的父 Chunk 上限为 2000 字符，子 Chunk 上限为 500 字符。字符数按 Unicode rune 计算，不等同于模型 Token 数，生产配置应结合目标 Embedding 模型的 Tokenizer 和真实语料抽样调整。
 
 ## 工作流拓扑
 
@@ -69,7 +69,7 @@ publish_index     模拟：不发布索引版本
 build_result      真实：输出 Parser、Chunk、关系、统计和阶段状态
 ```
 
-稳定工作流标识为 `rag_document_indexing@v3`。成功状态为 `chunked_with_simulated_downstream`。
+稳定工作流标识为 `rag_document_indexing@v4`，Chunk Profile 为 `rag-document-indexing@v2`。本次版本递增用于区分结构路径归一化前后的 Chunk 结果。成功状态为 `chunked_with_simulated_downstream`。
 
 ## 运行
 
@@ -90,12 +90,14 @@ go run ./examples/go-study/framework-api-design/19-packaged-document-pipeline ht
 输出 JSON 中的关键字段包括：
 
 ```text
-workflow=rag_document_indexing@v3
+workflow=rag_document_indexing@v4
 status=chunked_with_simulated_downstream
 parser.output.granularity=block
 parser.output.structured=true
 chunking.adapter_name=ingestion
 chunking.strategy_name=structure_aware
+chunking.chunks[].metadata.eino_chunking.structure.path=[<heading_block_id>, ...]
+chunking.chunks[].metadata.eino_chunking.structure.semantic_path=[<可读标题>, ...]
 chunking.chunks=[...]
 chunking.relations=[...]
 chunking.statistics={...}
@@ -109,7 +111,7 @@ chunking.statistics={...}
 EINO_DEV=true go run ./examples/go-study/framework-api-design/19-packaged-document-pipeline
 ```
 
-在 GoLand Eino Dev 中连接 `127.0.0.1:52538` 并选择 `rag_document_indexing@v3`。从 START 节点执行时可使用：
+在 GoLand Eino Dev 中连接 `127.0.0.1:52538` 并选择 `rag_document_indexing@v4`。从 START 节点执行时可使用：
 
 ```json
 {
@@ -131,7 +133,7 @@ go test ./...
 go vet ./...
 ```
 
-测试通过真实 Package 链路覆盖 Markdown 的 Structure-aware 分支和 TXT 的 Parent-child 分支，并验证错误链、依赖边界、输入不可变性以及结构化原子块超限错误。
+测试通过真实 Package 链路覆盖 Markdown 的 Structure-aware 分支和 TXT 的 Parent-child 分支，并验证 Heading Label、章节合并、身份/语义路径、错误链、依赖边界、输入不可变性以及结构化原子块超限错误。
 
 ## 已知限制
 
